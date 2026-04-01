@@ -1,0 +1,66 @@
+import { NextResponse } from "next/server";
+import { getQuiz, getAttempt, updateAttempt } from "@/lib/blob";
+import type { Answer } from "@/lib/types";
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ attemptId: string }> }
+) {
+  const { attemptId } = await params;
+  const body = await request.json();
+  const { answers: submittedAnswers, timedOut = false } = body as {
+    answers: Record<string, { selectedAnswer: string | null; timeSpentSeconds: number }>;
+    timedOut?: boolean;
+  };
+
+  const attempt = await getAttempt(attemptId);
+  if (!attempt) {
+    return NextResponse.json({ error: "Attempt not found" }, { status: 404 });
+  }
+
+  if (attempt.status !== "in_progress") {
+    return NextResponse.json({ error: "Attempt already submitted" }, { status: 400 });
+  }
+
+  const quiz = await getQuiz(attempt.quizId);
+  if (!quiz) {
+    return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+  }
+
+  // Grade answers
+  const gradedAnswers: Answer[] = quiz.questions.map((q) => {
+    const submitted = submittedAnswers[q.id];
+    const selectedAnswer = (submitted?.selectedAnswer as Answer["selectedAnswer"]) ?? null;
+    return {
+      questionId: q.id,
+      questionType: q.questionType,
+      selectedAnswer,
+      isCorrect: selectedAnswer === q.correctAnswer,
+      timeSpentSeconds: submitted?.timeSpentSeconds ?? 0,
+    };
+  });
+
+  const score = gradedAnswers.filter((a) => a.isCorrect).length;
+  const now = new Date().toISOString();
+  const startedAt = new Date(attempt.startedAt).getTime();
+  const timeSpentSeconds = Math.round((Date.now() - startedAt) / 1000);
+
+  const updatedAttempt = {
+    ...attempt,
+    completedAt: now,
+    timeSpentSeconds,
+    score,
+    status: timedOut ? ("timed_out" as const) : ("completed" as const),
+    answers: gradedAnswers,
+  };
+
+  await updateAttempt(updatedAttempt, quiz.title);
+
+  return NextResponse.json({
+    attemptId: updatedAttempt.id,
+    score,
+    totalQuestions: quiz.questions.length,
+    timeSpentSeconds,
+    status: updatedAttempt.status,
+  });
+}
