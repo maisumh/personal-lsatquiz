@@ -111,7 +111,7 @@ export default function CreateQuiz() {
                 setStep("select");
               }}
               variant="outline"
-              className="flex-1"
+              className="flex-1 h-10 rounded-xl"
             >
               Create Another
             </Button>
