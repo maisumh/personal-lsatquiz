@@ -85,21 +85,25 @@ export async function getAttempt(attemptId: string): Promise<Attempt | null> {
 
 export async function updateAttempt(attempt: Attempt, quizTitle: string): Promise<void> {
   await writeBlob(`attempts/${attempt.id}.json`, attempt);
-  // Update the index entry
+  // Upsert the index entry (add if not found, update if found)
   const index = await getIndex();
+  const entry = {
+    id: attempt.id,
+    quizId: attempt.quizId,
+    quizTitle,
+    score: attempt.score,
+    totalQuestions: attempt.totalQuestions,
+    completedAt: attempt.completedAt,
+    status: attempt.status,
+  };
   const idx = index.attempts.findIndex((a) => a.id === attempt.id);
   if (idx !== -1) {
-    index.attempts[idx] = {
-      id: attempt.id,
-      quizId: attempt.quizId,
-      quizTitle,
-      score: attempt.score,
-      totalQuestions: attempt.totalQuestions,
-      completedAt: attempt.completedAt,
-      status: attempt.status,
-    };
-    await writeBlob("index.json", index);
+    index.attempts[idx] = entry;
+  } else {
+    // Attempt wasn't in index (stale read) — add it
+    index.attempts.push(entry);
   }
+  await writeBlob("index.json", index);
 }
 
 // Index operations
