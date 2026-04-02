@@ -146,47 +146,60 @@ export default function QuizTake() {
     }
   };
 
+  const [submitError, setSubmitError] = useState("");
+  const submittingRef = useRef(false);
+
   const handleSubmit = async (timedOut = false) => {
+    if (submittingRef.current) return; // prevent double-submission
+    submittingRef.current = true;
     setSubmitting(true);
+    setSubmitError("");
 
-    // Read from ref (always up-to-date) and merge with localStorage as safety net
-    let finalAnswers: AnswerMap = { ...answersRef.current };
+    try {
+      // Read from ref (always up-to-date) and merge with localStorage as safety net
+      const finalAnswers: AnswerMap = { ...answersRef.current };
 
-    // Also check localStorage in case ref is stale
-    const saved = localStorage.getItem(`answers-${attemptId}`);
-    if (saved) {
-      const savedAnswers: AnswerMap = JSON.parse(saved);
-      for (const [qId, ans] of Object.entries(savedAnswers)) {
-        if (!finalAnswers[qId] || finalAnswers[qId].selectedAnswer === null) {
-          finalAnswers[qId] = ans;
+      // Also check localStorage in case ref is stale
+      const saved = localStorage.getItem(`answers-${attemptId}`);
+      if (saved) {
+        const savedAnswers: AnswerMap = JSON.parse(saved);
+        for (const [qId, ans] of Object.entries(savedAnswers)) {
+          if (!finalAnswers[qId] || finalAnswers[qId].selectedAnswer === null) {
+            finalAnswers[qId] = ans;
+          }
         }
       }
-    }
 
-    // Ensure all questions have entries
-    if (quiz) {
-      for (const q of quiz.questions) {
-        if (!finalAnswers[q.id]) {
-          finalAnswers[q.id] = { selectedAnswer: null, timeSpentSeconds: 0 };
+      // Ensure all questions have entries
+      if (quiz) {
+        for (const q of quiz.questions) {
+          if (!finalAnswers[q.id]) {
+            finalAnswers[q.id] = { selectedAnswer: null, timeSpentSeconds: 0 };
+          }
         }
       }
-    }
 
-    const res = await fetch(`/api/attempt/${attemptId}/submit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answers: finalAnswers, timedOut }),
-    });
+      const res = await fetch(`/api/attempt/${attemptId}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: finalAnswers, timedOut }),
+      });
 
-    if (res.ok) {
-      // Store the full results data so the results page gets it instantly
-      const resultData = await res.json();
-      sessionStorage.setItem("latest-quiz-results", JSON.stringify(resultData));
+      if (res.ok) {
+        const resultData = await res.json();
+        sessionStorage.setItem("latest-quiz-results", JSON.stringify(resultData));
 
-      localStorage.removeItem(`answers-${attemptId}`);
-      localStorage.removeItem(`index-${attemptId}`);
-      sessionStorage.removeItem(`attempt-${params.quizId}`);
-      router.push(`/quiz/${params.quizId}/results/${resultData.attempt.id}`);
+        localStorage.removeItem(`answers-${attemptId}`);
+        localStorage.removeItem(`index-${attemptId}`);
+        sessionStorage.removeItem(`attempt-${params.quizId}`);
+        router.push(`/quiz/${params.quizId}/results/${resultData.attempt.id}`);
+      } else {
+        throw new Error(`Server error (${res.status})`);
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit. Try again.");
+      setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 
@@ -344,6 +357,11 @@ export default function QuizTake() {
               )}
             </DialogDescription>
           </DialogHeader>
+          {submitError && (
+            <div className="mt-2 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+              {submitError}
+            </div>
+          )}
           <div className="flex gap-3 mt-4">
             <Button
               variant="outline"

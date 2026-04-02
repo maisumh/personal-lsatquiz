@@ -87,7 +87,6 @@ export default function ResultsPage() {
   }
 
   const { attempt, quiz, questions } = data;
-  console.log("[RESULTS] data:", JSON.stringify({ score: attempt.score, total: attempt.totalQuestions, q0: questions[0]?.selectedAnswer, q0correct: questions[0]?.isCorrect }));
   const percentage = Math.round(((attempt.score ?? 0) / attempt.totalQuestions) * 100);
   const isGreat = percentage >= 80;
   const isOkay = percentage >= 60 && percentage < 80;

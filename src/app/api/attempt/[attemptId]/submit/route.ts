@@ -13,11 +13,6 @@ export async function POST(
     timedOut?: boolean;
   };
 
-  // Debug: log what we received
-  const answeredCount = Object.values(submittedAnswers || {}).filter(
-    (a) => a?.selectedAnswer !== null
-  ).length;
-  console.log(`[SUBMIT] attemptId=${attemptId}, answeredCount=${answeredCount}, keys=${Object.keys(submittedAnswers || {}).length}`);
 
   const attempt = await getAttempt(attemptId);
   if (!attempt) {
@@ -37,7 +32,6 @@ export async function POST(
   const gradedAnswers: Answer[] = quiz.questions.map((q) => {
     const submitted = submittedAnswers[q.id];
     const selectedAnswer = (submitted?.selectedAnswer as Answer["selectedAnswer"]) ?? null;
-    console.log(`[GRADE] q.id=${q.id}, submitted=${JSON.stringify(submitted)}, selectedAnswer=${selectedAnswer}, correctAnswer=${q.correctAnswer}, match=${selectedAnswer === q.correctAnswer}`);
     return {
       questionId: q.id,
       questionType: q.questionType,
