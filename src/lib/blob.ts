@@ -35,11 +35,11 @@ async function readBlob<T>(path: string): Promise<T | null> {
 async function writeBlob(path: string, data: unknown): Promise<string> {
   const fullPath = BLOB_PREFIX + path;
 
-  // put with addRandomSuffix: false overwrites at the same path
   const blob = await put(fullPath, JSON.stringify(data), {
     access: "public",
     contentType: "application/json",
     addRandomSuffix: false,
+    allowOverwrite: true,
   });
 
   // Cache the URL for immediate read-after-write consistency

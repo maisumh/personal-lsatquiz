@@ -63,11 +63,34 @@ export async function POST(
 
   await updateAttempt(updatedAttempt, quiz.title);
 
+  // Return full results data so the client doesn't need a separate read
+  const questionsWithAnswers = quiz.questions.map((q) => {
+    const answer = gradedAnswers.find((a) => a.questionId === q.id);
+    return {
+      ...q,
+      selectedAnswer: answer?.selectedAnswer ?? null,
+      isCorrect: answer?.isCorrect ?? false,
+      answerTimeSpent: answer?.timeSpentSeconds ?? 0,
+    };
+  });
+
   return NextResponse.json({
-    attemptId: updatedAttempt.id,
-    score,
-    totalQuestions: quiz.questions.length,
-    timeSpentSeconds,
-    status: updatedAttempt.status,
+    attempt: {
+      id: updatedAttempt.id,
+      quizId: updatedAttempt.quizId,
+      startedAt: updatedAttempt.startedAt,
+      completedAt: updatedAttempt.completedAt,
+      timeSpentSeconds,
+      score,
+      totalQuestions: quiz.questions.length,
+      status: updatedAttempt.status,
+    },
+    quiz: {
+      title: quiz.title,
+      type: quiz.type,
+      questionTypes: quiz.questionTypes,
+      timeLimitMinutes: quiz.timeLimitMinutes,
+    },
+    questions: questionsWithAnswers,
   });
 }

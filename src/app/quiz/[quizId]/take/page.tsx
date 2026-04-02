@@ -179,10 +179,14 @@ export default function QuizTake() {
     });
 
     if (res.ok) {
+      // Store the full results data so the results page gets it instantly
+      const resultData = await res.json();
+      sessionStorage.setItem("latest-quiz-results", JSON.stringify(resultData));
+
       localStorage.removeItem(`answers-${attemptId}`);
       localStorage.removeItem(`index-${attemptId}`);
       sessionStorage.removeItem(`attempt-${params.quizId}`);
-      router.push(`/quiz/${params.quizId}/results/${attemptId}`);
+      router.push(`/quiz/${params.quizId}/results/${resultData.attempt.id}`);
     }
   };
 

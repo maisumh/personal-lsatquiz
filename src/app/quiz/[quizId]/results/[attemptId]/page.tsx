@@ -38,15 +38,33 @@ interface ResultData {
 
 export default function ResultsPage() {
   const params = useParams();
-  const [data, setData] = useState<ResultData | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // Check sessionStorage BEFORE first render (immune to Strict Mode double-runs)
+  const [data, setData] = useState<ResultData | null>(() => {
+    if (typeof window === "undefined") return null;
+    const cached = sessionStorage.getItem("latest-quiz-results");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.attempt?.id === params.attemptId) {
+          sessionStorage.removeItem("latest-quiz-results");
+          return parsed;
+        }
+      } catch { /* fall through to API */ }
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(!data);
 
   useEffect(() => {
-    fetch(`/api/attempt/${params.attemptId}`)
+    // Only fetch from API if we don't already have data from sessionStorage
+    if (data) return;
+
+    fetch(`/api/attempt/${params.attemptId}`, { cache: "no-store" })
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));
-  }, [params.attemptId]);
+  }, [params.attemptId, data]);
 
   if (loading) {
     return (
@@ -69,7 +87,8 @@ export default function ResultsPage() {
   }
 
   const { attempt, quiz, questions } = data;
-  const percentage = Math.round((attempt.score / attempt.totalQuestions) * 100);
+  console.log("[RESULTS] data:", JSON.stringify({ score: attempt.score, total: attempt.totalQuestions, q0: questions[0]?.selectedAnswer, q0correct: questions[0]?.isCorrect }));
+  const percentage = Math.round(((attempt.score ?? 0) / attempt.totalQuestions) * 100);
   const isGreat = percentage >= 80;
   const isOkay = percentage >= 60 && percentage < 80;
 
