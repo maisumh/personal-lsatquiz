@@ -1,5 +1,521 @@
 import type { Question } from "../types";
 
+// LSAT Basics (Chapter 1)
+const lsatBasics: Question[] = [
+  {
+    id: "lb-1",
+    questionType: "lsat-basics",
+    stimulus:
+      "The LSAT Logical Reasoning section presents short passages followed by questions that test your ability to analyze arguments. Each passage typically contains an argument — a set of statements where one or more premises are offered in support of a conclusion. Understanding this structure is fundamental to answering LR questions correctly.",
+    questionStem:
+      "Based on the passage, which one of the following most accurately describes the fundamental skill tested by LSAT Logical Reasoning questions?",
+    choices: {
+      A: "The ability to memorize logical formulas and apply them mechanically.",
+      B: "The ability to read quickly and retain large amounts of information.",
+      C: "The ability to analyze arguments by identifying how premises support conclusions.",
+      D: "The ability to generate original arguments on legal topics.",
+      E: "The ability to evaluate the emotional persuasiveness of a speaker.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "The passage explicitly states that LR tests 'your ability to analyze arguments' and that arguments consist of premises supporting conclusions. (A) is wrong — the LSAT isn't about memorizing formulas. (B) is about reading speed/memory. (D) is about generating arguments, not analyzing them. (E) focuses on emotion, not logic.",
+  },
+  {
+    id: "lb-2",
+    questionType: "lsat-basics",
+    stimulus:
+      "On the LSAT, each Logical Reasoning section contains approximately 25-26 questions to be completed in 35 minutes. This means test-takers have roughly 1 minute and 20 seconds per question. However, not all questions are equally difficult — some can be answered in 30 seconds while others may take over 2 minutes.",
+    questionStem:
+      "Which one of the following strategies is best supported by the information above?",
+    choices: {
+      A: "Spend exactly 1 minute and 20 seconds on every question.",
+      B: "Skip all difficult questions and only answer easy ones.",
+      C: "Manage time flexibly, spending less time on easier questions to save time for harder ones.",
+      D: "Always answer questions in order without skipping any.",
+      E: "Focus only on the first half of the section since those questions are worth more.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "Since questions vary in difficulty and the average time per question is about 1:20, flexible time management — spending less on easy questions to bank time for hard ones — is the best strategy. (A) is rigid and ignores difficulty variation. (B) is extreme. (D) doesn't account for difficulty. (E) is false — all questions are worth the same.",
+  },
+  {
+    id: "lb-3",
+    questionType: "lsat-basics",
+    stimulus:
+      "In LSAT Logical Reasoning, every question has exactly one correct answer and four incorrect answers. The incorrect answers are designed to be tempting — they often contain elements that are partially true, address the topic of the stimulus, or resemble the correct answer in some way. The test makers deliberately construct wrong answers that exploit common reasoning errors.",
+    questionStem:
+      "The passage most strongly supports which one of the following claims about LSAT wrong answers?",
+    choices: {
+      A: "Wrong answers are usually obviously incorrect and easy to eliminate.",
+      B: "Wrong answers are randomly generated and have no relationship to the stimulus.",
+      C: "Wrong answers are intentionally designed to appeal to test-takers who make predictable reasoning mistakes.",
+      D: "Wrong answers always contain factually false statements.",
+      E: "There are sometimes two equally correct answers on the LSAT.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "The passage says wrong answers 'exploit common reasoning errors' and are 'designed to be tempting.' This directly supports (C). (A) contradicts the passage. (B) contradicts the deliberate design described. (D) is not stated — wrong answers can contain true statements but still be wrong for other reasons. (E) contradicts 'exactly one correct answer.'",
+  },
+  {
+    id: "lb-4",
+    questionType: "lsat-basics",
+    stimulus:
+      "A stimulus in an LSAT Logical Reasoning question might be an argument, a set of facts, a paradox, or a dialogue between two speakers. Not every stimulus contains an argument — some simply present information without drawing a conclusion. Recognizing whether a stimulus contains an argument is an important first step in answering the question.",
+    questionStem:
+      "According to the passage, which one of the following is true about LSAT stimuli?",
+    choices: {
+      A: "Every stimulus contains an argument with a clear conclusion.",
+      B: "Stimuli are always written as dialogues between two speakers.",
+      C: "Some stimuli present information without making an argument.",
+      D: "The stimulus is always irrelevant to answering the question.",
+      E: "Stimuli never contain more than two sentences.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "The passage explicitly states 'Not every stimulus contains an argument — some simply present information without drawing a conclusion.' (A) directly contradicts this. (B) is too narrow — dialogues are just one format. (D) is absurd. (E) is not stated and is false.",
+  },
+  {
+    id: "lb-5",
+    questionType: "lsat-basics",
+    stimulus:
+      "The LSAT uses a variety of question stems to signal what type of reasoning task is required. For example, 'Which one of the following most weakens the argument?' asks you to find information that undermines the conclusion, while 'The argument is most vulnerable to criticism on the grounds that it...' asks you to identify a flaw in the reasoning. Learning to recognize these question stems helps you know what to look for before reading the answer choices.",
+    questionStem:
+      "The passage suggests that a test-taker should read the question stem before the answer choices primarily because",
+    choices: {
+      A: "the question stem contains the correct answer",
+      B: "knowing the question type helps focus your analysis of the stimulus and answers",
+      C: "the answer choices are always misleading",
+      D: "question stems are harder to understand than answer choices",
+      E: "the question stem is always the longest part of the question",
+    },
+    correctAnswer: "B",
+    explanation:
+      "The passage says recognizing question stems 'helps you know what to look for before reading the answer choices' — meaning it focuses your analysis. (A) is wrong — stems ask questions, they don't contain answers. (C) is too extreme. (D) and (E) are not supported.",
+  },
+  {
+    id: "lb-6",
+    questionType: "lsat-basics",
+    stimulus:
+      "The LSAT does not penalize for wrong answers — your score is based solely on the number of questions you answer correctly. This means that leaving a question blank is never strategically advantageous. Even if you have no idea which answer is correct, you should always select an answer.",
+    questionStem:
+      "Which one of the following conclusions is most strongly supported by the information above?",
+    choices: {
+      A: "Guessing randomly on every question is the best strategy.",
+      B: "You should never leave any question unanswered on the LSAT.",
+      C: "Wrong answers lower your score more than blank answers do.",
+      D: "The LSAT rewards test-takers who spend extra time double-checking answers.",
+      E: "It is better to skip difficult questions permanently than to guess.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "Since there's no penalty for wrong answers and your score is based on correct answers only, leaving a question blank gives you a 0% chance of getting it right, while guessing gives you at least a 20% chance. You should never leave blanks. (A) is too extreme — targeted guessing is better than random. (C) is the opposite of what's stated. (D) is not supported. (E) contradicts the passage.",
+  },
+  {
+    id: "lb-7",
+    questionType: "lsat-basics",
+    stimulus:
+      "LSAT Logical Reasoning questions test a range of skills including: identifying conclusions and premises, recognizing assumptions, evaluating the strength of arguments, finding logical flaws, and applying principles. These skills are considered essential for success in law school, where students must regularly analyze complex legal arguments.",
+    questionStem:
+      "The passage provides the most support for which one of the following claims?",
+    choices: {
+      A: "The LSAT tests skills that are directly relevant to legal education.",
+      B: "All lawyers use formal logic in their daily practice.",
+      C: "The LSAT is the most important factor in law school admissions.",
+      D: "Logical reasoning skills cannot be improved through practice.",
+      E: "Law school is primarily about memorizing legal statutes.",
+    },
+    correctAnswer: "A",
+    explanation:
+      "The passage links LR skills to law school success ('essential for success in law school, where students must regularly analyze complex legal arguments'). (B) goes beyond what's stated. (C) is about admissions, not discussed. (D) contradicts the purpose of a prep book. (E) contradicts the focus on argument analysis.",
+  },
+  {
+    id: "lb-8",
+    questionType: "lsat-basics",
+    stimulus:
+      "When approaching an LSAT Logical Reasoning question, many experts recommend reading the question stem first, then the stimulus, and finally the answer choices. Reading the stem first tells you what type of question you're dealing with, which allows you to read the stimulus more efficiently — for instance, if you know you need to find the conclusion, you can focus on identifying it as you read.",
+    questionStem:
+      "The recommended approach described in the passage is based on which one of the following principles?",
+    choices: {
+      A: "Questions should always be answered as quickly as possible.",
+      B: "Knowing what you're looking for makes reading more purposeful and efficient.",
+      C: "The stimulus is less important than the answer choices.",
+      D: "All LSAT questions require the same analytical approach.",
+      E: "Reading speed is more important than comprehension on the LSAT.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "The passage explains that reading the stem first 'allows you to read the stimulus more efficiently' because you know what to focus on. This is the principle of purposeful reading. (A) is about speed, not the principle. (C) contradicts the approach. (D) is contradicted by the mention of different question types. (E) misses the point about focused reading.",
+  },
+];
+
+// Argument Structure (Chapter 2)
+const argumentStructure: Question[] = [
+  {
+    id: "as-1",
+    questionType: "argument-structure",
+    stimulus:
+      "Since the new highway will increase traffic noise in residential areas, and increased traffic noise lowers property values, the city council should reject the highway proposal.",
+    questionStem:
+      "In the argument above, the statement 'increased traffic noise lowers property values' plays which one of the following roles?",
+    choices: {
+      A: "It is the main conclusion of the argument.",
+      B: "It is a premise that supports the conclusion that the highway should be rejected.",
+      C: "It is a subsidiary conclusion drawn from another premise.",
+      D: "It is an assumption that contradicts the main conclusion.",
+      E: "It is a concession to the opposing viewpoint.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "The conclusion is 'the city council should reject the highway proposal.' The statement about noise lowering property values is a premise that, combined with the other premise (the highway will increase noise), supports rejecting the highway. (A) misidentifies the conclusion. (C) — it's stated as a fact, not derived. (D) and (E) don't match its role.",
+  },
+  {
+    id: "as-2",
+    questionType: "argument-structure",
+    stimulus:
+      "Regular exercise improves cardiovascular health. Improved cardiovascular health reduces the risk of heart disease. Therefore, regular exercise reduces the risk of heart disease. For this reason, the government should fund public fitness programs.",
+    questionStem:
+      "Which one of the following best describes the role of the statement 'regular exercise reduces the risk of heart disease' in the argument?",
+    choices: {
+      A: "It is the main conclusion of the argument.",
+      B: "It is a premise offered in direct support of the main conclusion.",
+      C: "It is a subsidiary conclusion that is used as a premise for the main conclusion.",
+      D: "It is background information that is not part of the argument.",
+      E: "It is an example used to illustrate a general principle.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "This statement is derived from the first two premises (exercise improves cardio health + cardio health reduces heart disease = exercise reduces heart disease). It's then used as a premise ('For this reason') for the main conclusion about funding fitness programs. This makes it a subsidiary conclusion — both a conclusion from earlier premises and a premise for the final conclusion.",
+  },
+  {
+    id: "as-3",
+    questionType: "argument-structure",
+    stimulus:
+      "Admittedly, the proposed park renovation will be expensive. However, parks increase property values in surrounding neighborhoods, and the increased tax revenue from higher property values will eventually offset the renovation costs. The city should therefore proceed with the renovation.",
+    questionStem:
+      "The word 'Admittedly' at the beginning of the argument signals that the author is",
+    choices: {
+      A: "stating the main conclusion of the argument",
+      B: "acknowledging a point that appears to work against the argument's conclusion before offering counterarguments",
+      C: "introducing the strongest premise in support of the conclusion",
+      D: "rejecting an opponent's claim as false",
+      E: "providing evidence that directly supports the renovation",
+    },
+    correctAnswer: "B",
+    explanation:
+      "'Admittedly' is a concession indicator — the author acknowledges a potential objection (the cost) before arguing that benefits outweigh it. This is a common argumentative strategy. (A) — the cost isn't the conclusion. (C) — it works against the conclusion. (D) — the author doesn't reject it, they acknowledge it. (E) — the expense is a point against renovation.",
+  },
+  {
+    id: "as-4",
+    questionType: "argument-structure",
+    stimulus:
+      "Because contaminated water causes illness, and the factory has been dumping chemicals into the river, the downstream communities are at risk. No company should be allowed to endanger public health for profit.",
+    questionStem:
+      "Which one of the following is the main conclusion of the argument?",
+    choices: {
+      A: "Contaminated water causes illness.",
+      B: "The factory has been dumping chemicals into the river.",
+      C: "The downstream communities are at risk.",
+      D: "No company should be allowed to endanger public health for profit.",
+      E: "The factory should stop dumping chemicals.",
+    },
+    correctAnswer: "D",
+    explanation:
+      "The broad principle 'No company should be allowed to endanger public health for profit' is the main conclusion — the specific facts about the factory serve as premises leading to this broader point. (A) and (B) are premises. (C) is a subsidiary conclusion. (E) is implied but not stated.",
+  },
+  {
+    id: "as-5",
+    questionType: "argument-structure",
+    stimulus:
+      "The word 'therefore' indicates that a conclusion follows. The word 'because' indicates that a premise follows. The word 'however' indicates a contrast or shift in direction. The word 'moreover' indicates that an additional supporting point follows.",
+    questionStem:
+      "Based on the information above, which one of the following sentences contains a conclusion?",
+    choices: {
+      A: "Because the roads are icy, driving is dangerous today.",
+      B: "Moreover, the study included participants from diverse backgrounds.",
+      C: "However, the results were unexpected.",
+      D: "The experiment was carefully designed because the researchers wanted accurate results.",
+      E: "Therefore, the committee should approve the funding request.",
+    },
+    correctAnswer: "E",
+    explanation:
+      "'Therefore' signals a conclusion, so (E) contains a conclusion: 'the committee should approve the funding request.' In (A), 'because' introduces a premise ('roads are icy'), and the conclusion is 'driving is dangerous.' In (D), 'because' introduces a premise. (B) uses 'moreover' for an additional premise. (C) uses 'however' for contrast.",
+  },
+  {
+    id: "as-6",
+    questionType: "argument-structure",
+    stimulus:
+      "It is sometimes said that great athletes are born, not made. But this view ignores the thousands of hours of practice that every elite athlete puts in. Natural talent may provide an initial advantage, but without sustained effort, talent alone is insufficient for greatness. Hard work, not genetics, is the primary determinant of athletic success.",
+    questionStem:
+      "In the argument, the claim 'great athletes are born, not made' functions as",
+    choices: {
+      A: "the main conclusion that the argument defends",
+      B: "a view that the argument opposes and argues against",
+      C: "a premise supporting the argument's conclusion",
+      D: "evidence cited in support of the value of natural talent",
+      E: "a subsidiary conclusion derived from other premises",
+    },
+    correctAnswer: "B",
+    explanation:
+      "The phrase 'It is sometimes said' introduces a view that the author then argues against with 'But this view ignores...' The author's actual conclusion is the opposite: hard work is the primary determinant. (A) is backward — the argument opposes this view. (C), (D), and (E) misidentify its role.",
+  },
+  {
+    id: "as-7",
+    questionType: "argument-structure",
+    stimulus:
+      "The city's budget surplus should be used to improve public schools. After all, education is the foundation of a prosperous society, and our schools currently lack basic resources like up-to-date textbooks and functioning laboratory equipment.",
+    questionStem:
+      "The phrase 'After all' in the argument serves to",
+    choices: {
+      A: "introduce the conclusion of the argument",
+      B: "signal that what follows are the premises supporting the preceding conclusion",
+      C: "indicate a shift to an opposing viewpoint",
+      D: "mark the beginning of a concession",
+      E: "introduce a counterexample",
+    },
+    correctAnswer: "B",
+    explanation:
+      "'After all' is a premise indicator — it signals that the reasons supporting the preceding conclusion will follow. The conclusion ('budget surplus should improve schools') comes first, then 'after all' introduces the supporting reasons. (A) is backward. (C), (D), and (E) don't match this indicator word.",
+  },
+  {
+    id: "as-8",
+    questionType: "argument-structure",
+    stimulus:
+      "Some people claim that standardized tests are biased. Others argue that they are the most objective measure of ability available. While both sides make valid points, the real question is not whether tests are perfect, but whether they are better than the alternatives.",
+    questionStem:
+      "The author's argument is best described as",
+    choices: {
+      A: "strongly supporting standardized testing",
+      B: "strongly opposing standardized testing",
+      C: "reframing the debate by shifting the relevant question from perfection to comparative merit",
+      D: "presenting two views without taking any position",
+      E: "providing new evidence that resolves the disagreement",
+    },
+    correctAnswer: "C",
+    explanation:
+      "The author acknowledges both sides ('both make valid points') but then shifts the discussion: the question isn't whether tests are perfect but whether they're better than alternatives. This is reframing. (A) and (B) are too one-sided. (D) — the author does take a position on what the 'real question' is. (E) — no new evidence is presented.",
+  },
+  {
+    id: "as-9",
+    questionType: "argument-structure",
+    stimulus:
+      "The proposal to ban cell phones in schools has merit. Students are often distracted by their phones during class. Additionally, phones facilitate cheating on exams. However, phones can also serve as valuable educational tools when used appropriately. On balance, the distractions outweigh the benefits.",
+    questionStem:
+      "The statement 'phones can also serve as valuable educational tools when used appropriately' plays which of the following roles in the argument?",
+    choices: {
+      A: "It is the main conclusion.",
+      B: "It is a premise supporting the ban on phones.",
+      C: "It is a counterpoint that the author acknowledges before reaffirming the main conclusion.",
+      D: "It is evidence that contradicts the claim about distractions.",
+      E: "It is an irrelevant aside that does not affect the argument.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "Introduced by 'However,' this statement is a counterpoint — the author acknowledges that phones have educational value, then concludes with 'On balance, the distractions outweigh the benefits,' reaffirming the pro-ban position. This is a concession followed by a rebuttal. (A), (B), (D), and (E) misidentify its role.",
+  },
+  {
+    id: "as-10",
+    questionType: "argument-structure",
+    stimulus:
+      "The claim that video games improve hand-eye coordination is not sufficient reason to consider them beneficial overall. Video games are also associated with sedentary behavior, social isolation, and increased aggression. A full assessment must consider all effects, not just one positive finding.",
+    questionStem:
+      "The argument proceeds by",
+    choices: {
+      A: "rejecting a claim entirely and providing evidence it is false",
+      B: "accepting a claim as true but arguing it is insufficient because it ignores other relevant factors",
+      C: "presenting two equally strong opposing views without resolving them",
+      D: "using an analogy to illustrate a point about video games",
+      E: "appealing to expert authority on the effects of video games",
+    },
+    correctAnswer: "B",
+    explanation:
+      "The argument doesn't deny that video games improve coordination — it says this 'is not sufficient reason' to call them beneficial overall, then lists negative effects. It accepts one positive claim while arguing the full picture is negative. (A) — the claim isn't rejected. (C) — the author takes a clear side. (D) and (E) don't match the argument's structure.",
+  },
+];
+
+// Conditional Reasoning (Chapter 3)
+const conditionalReasoning: Question[] = [
+  {
+    id: "cr-1",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "If a student passes the final exam, then the student passes the course. If a student passes the course, then the student receives credit. Ava did not receive credit.",
+    questionStem:
+      "If all of the statements above are true, which one of the following must also be true?",
+    choices: {
+      A: "Ava passed the final exam.",
+      B: "Ava passed the course but did not receive credit.",
+      C: "Ava did not pass the final exam.",
+      D: "Ava received credit but did not pass the course.",
+      E: "Ava may or may not have passed the final exam.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "Chain: Pass exam → Pass course → Receive credit. Contrapositive: No credit → No pass course → No pass exam. Since Ava didn't receive credit, she didn't pass the course, and therefore didn't pass the exam. (A) contradicts this. (B) is impossible — passing the course means receiving credit. (D) is contradictory. (E) is wrong — we can determine she didn't pass.",
+  },
+  {
+    id: "cr-2",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "All managers must attend the leadership seminar. Only employees who have been with the company for at least two years are eligible for promotion to manager.",
+    questionStem:
+      "If the statements above are true, which one of the following must also be true?",
+    choices: {
+      A: "All employees who attend the leadership seminar are managers.",
+      B: "Anyone promoted to manager has been with the company for at least two years and must attend the leadership seminar.",
+      C: "Employees with less than two years at the company attend the leadership seminar.",
+      D: "The leadership seminar is only for managers.",
+      E: "All employees who have been with the company for two years are managers.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "Promoted to manager → at least 2 years AND must attend seminar. Both conditions apply to anyone who becomes a manager. (A) reverses the first conditional — non-managers might also attend. (C) contradicts the eligibility rule. (D) says 'only,' which isn't stated. (E) reverses the second conditional — having 2 years is necessary but not sufficient for promotion.",
+  },
+  {
+    id: "cr-3",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "The statement 'You can enter the VIP lounge only if you have a gold membership' means that having a gold membership is a necessary condition for entering the VIP lounge.",
+    questionStem:
+      "Which one of the following is the correct contrapositive of the statement about the VIP lounge?",
+    choices: {
+      A: "If you have a gold membership, then you can enter the VIP lounge.",
+      B: "If you do not have a gold membership, then you cannot enter the VIP lounge.",
+      C: "If you can enter the VIP lounge, then you must have a gold membership.",
+      D: "If you cannot enter the VIP lounge, then you do not have a gold membership.",
+      E: "You can enter the VIP lounge if and only if you have a gold membership.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "The original: Enter VIP → Gold membership (gold is necessary). The contrapositive negates and reverses: No gold membership → Cannot enter VIP. (B) states this correctly. (A) reverses without negating (the converse — having gold doesn't guarantee entry). (C) restates the original conditional. (D) negates without reversing properly. (E) adds a biconditional not in the original.",
+  },
+  {
+    id: "cr-4",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "Unless the committee approves the budget, the project will be canceled. The committee will approve the budget only if the cost estimate is under one million dollars.",
+    questionStem:
+      "If the cost estimate is $1.2 million, which one of the following must be true?",
+    choices: {
+      A: "The project will not be canceled.",
+      B: "The committee will approve the budget.",
+      C: "The project will be canceled.",
+      D: "The committee may or may not approve the budget.",
+      E: "The cost estimate will be revised downward.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "'Unless' translates to: If NOT committee approves → project canceled. The second statement: Committee approves → cost under $1M. Contrapositive: cost NOT under $1M → committee does NOT approve. At $1.2M, the cost is over $1M, so the committee won't approve. If the committee doesn't approve, the project is canceled. (A) and (B) contradict this chain. (D) is wrong — we can determine the outcome. (E) is not supported.",
+  },
+  {
+    id: "cr-5",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "Consider the statement: 'If it is raining, then the ground is wet.' Someone observes that the ground is wet and concludes that it must be raining.",
+    questionStem:
+      "The reasoning in the conclusion described above is flawed because it",
+    choices: {
+      A: "denies the antecedent of the conditional statement",
+      B: "affirms the consequent — the ground could be wet for other reasons such as sprinklers",
+      C: "correctly applies the contrapositive of the conditional",
+      D: "confuses a necessary condition with a biconditional",
+      E: "assumes the conditional statement is false",
+    },
+    correctAnswer: "B",
+    explanation:
+      "Rain → Wet ground. Observing wet ground (the consequent) and concluding rain (the antecedent) is the fallacy of affirming the consequent. The ground could be wet from sprinklers, a spill, or dew. (A) is a different error. (C) — this is not a valid contrapositive. (D) is close but (B) is more precise and includes the specific example. (E) — the person doesn't question the original statement.",
+  },
+  {
+    id: "cr-6",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "If a fruit is an apple, then it grows on a tree. If a fruit grows on a tree, then it is not grown underground. Some apples are green.",
+    questionStem:
+      "If the statements above are true, which one of the following must be true?",
+    choices: {
+      A: "All fruits that grow on trees are apples.",
+      B: "No apples are grown underground.",
+      C: "All green things are apples.",
+      D: "Some fruits grown underground are green.",
+      E: "All fruits that are not grown underground are apples.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "Chain: Apple → Grows on tree → Not underground. Therefore no apple is grown underground. (A) reverses the first conditional. (C) is unsupported — many green things aren't apples. (D) is unsupported. (E) reverses the chain.",
+  },
+  {
+    id: "cr-7",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "The sign says: 'No shirt, no shoes, no service.' This means that wearing a shirt is necessary for receiving service, and wearing shoes is necessary for receiving service.",
+    questionStem:
+      "Which one of the following scenarios is consistent with the policy stated on the sign?",
+    choices: {
+      A: "A person wearing shoes but no shirt receives service.",
+      B: "A person wearing a shirt and shoes does not receive service.",
+      C: "A person wearing neither a shirt nor shoes receives service.",
+      D: "A person wearing a shirt but no shoes receives service.",
+      E: "A person wearing no shirt and no shoes receives service because they are a regular customer.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "Shirt and shoes are both NECESSARY for service, but not necessarily sufficient. A person could have both and still be denied service for other reasons (e.g., the restaurant is full). (A), (C), (D), and (E) all violate the necessary conditions — service is given without required items. (B) is consistent because having shirt and shoes doesn't guarantee service.",
+  },
+  {
+    id: "cr-8",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "The detective reasoned as follows: 'The suspect could have committed the crime only if she was in the city that night. Phone records show she was not in the city that night.'",
+    questionStem:
+      "Which one of the following conclusions can the detective validly draw?",
+    choices: {
+      A: "The suspect committed the crime from a different location.",
+      B: "Someone else committed the crime.",
+      C: "The suspect could not have committed the crime.",
+      D: "The phone records are unreliable.",
+      E: "The suspect was in the city but hid her phone location.",
+    },
+    correctAnswer: "C",
+    explanation:
+      "'Only if in the city' means: Committed crime → In city. Contrapositive: Not in city → Did not commit crime. The phone records show she wasn't in the city, so she could not have committed the crime. (A) contradicts the 'only if' condition. (B) goes beyond what's established. (D) undermines the premise. (E) contradicts the accepted evidence.",
+  },
+  {
+    id: "cr-9",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "Statement 1: 'If you study hard, you will pass the test.'\nStatement 2: 'If you do not pass the test, you did not study hard.'\nStatement 3: 'If you pass the test, you studied hard.'\nStatement 4: 'If you do not study hard, you will not pass the test.'",
+    questionStem:
+      "Which one of the following correctly identifies the relationship between the statements?",
+    choices: {
+      A: "Statements 1 and 2 say the same thing, and Statements 3 and 4 say the same thing.",
+      B: "All four statements say the same thing.",
+      C: "Statements 1 and 4 say the same thing, and Statements 2 and 3 say the same thing.",
+      D: "Statement 2 is the contrapositive of Statement 1, and Statement 3 is the converse of Statement 1.",
+      E: "None of the statements are logically related to each other.",
+    },
+    correctAnswer: "D",
+    explanation:
+      "Statement 1: Study → Pass. Statement 2: Not Pass → Not Study (contrapositive of 1 — logically equivalent). Statement 3: Pass → Study (converse of 1 — NOT logically equivalent). Statement 4: Not Study → Not Pass (inverse of 1 — NOT logically equivalent). So 1 and 2 are equivalent (original and contrapositive), while 3 is the converse and 4 is the inverse. (D) correctly identifies these relationships.",
+  },
+  {
+    id: "cr-10",
+    questionType: "conditional-reasoning",
+    stimulus:
+      "To be eligible for the scholarship, a student must have a GPA of at least 3.5 and must have completed at least 30 credit hours. Maria has a GPA of 3.8 but has completed only 24 credit hours.",
+    questionStem:
+      "Based on the information above, which one of the following must be true?",
+    choices: {
+      A: "Maria is eligible for the scholarship.",
+      B: "Maria is not eligible for the scholarship.",
+      C: "Maria will become eligible once she completes 6 more credit hours.",
+      D: "Maria's GPA is insufficient for the scholarship.",
+      E: "No one with fewer than 30 credit hours has ever received the scholarship.",
+    },
+    correctAnswer: "B",
+    explanation:
+      "Eligibility requires BOTH conditions: GPA ≥ 3.5 AND ≥ 30 credit hours. Maria meets the GPA requirement (3.8) but not the credit hours (24 < 30). Since both are necessary, failing one means she's not eligible. (A) is wrong — she doesn't meet all requirements. (C) assumes her GPA won't change and that these are the only requirements. (D) is false — her GPA exceeds 3.5. (E) goes beyond what's stated.",
+  },
+];
+
 // Must Be True (Chapter 4)
 const mustBeTrue: Question[] = [
   {
@@ -2326,6 +2842,9 @@ const parallelFlaw: Question[] = [
 
 // Build the complete question bank
 export const QUESTION_BANK: Record<string, Question[]> = {
+  "lsat-basics": lsatBasics,
+  "argument-structure": argumentStructure,
+  "conditional-reasoning": conditionalReasoning,
   "must-be-true": mustBeTrue,
   "main-point": mainPoint,
   assumption,

@@ -65,7 +65,15 @@ export async function POST(request: Request) {
     questions: selectedQuestions,
   };
 
-  await saveQuiz(quiz);
+  try {
+    await saveQuiz(quiz);
+  } catch (err) {
+    console.error("Failed to save quiz:", err);
+    return NextResponse.json(
+      { error: "Failed to save quiz. Check that Blob storage is connected." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     id: quiz.id,

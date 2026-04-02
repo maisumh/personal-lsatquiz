@@ -15,6 +15,7 @@ export default function CreateQuiz() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [quizLink, setQuizLink] = useState("");
+  const [error, setError] = useState("");
 
   const toggleType = (slug: string) => {
     setSelectedTypes((prev) =>
@@ -33,20 +34,31 @@ export default function CreateQuiz() {
   const handleCreate = async () => {
     if (selectedTypes.length === 0) return;
     setCreating(true);
+    setError("");
 
-    const res = await fetch("/api/quiz/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title || undefined,
-        type,
-        questionTypes: selectedTypes,
-      }),
-    });
+    try {
+      const res = await fetch("/api/quiz/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title || undefined,
+          type,
+          questionTypes: selectedTypes,
+        }),
+      });
 
-    const data = await res.json();
-    setQuizLink(`${window.location.origin}/quiz/${data.id}`);
-    setCreating(false);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error (${res.status})`);
+      }
+
+      const data = await res.json();
+      setQuizLink(`${window.location.origin}/quiz/${data.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create quiz");
+    } finally {
+      setCreating(false);
+    }
   };
 
   const copyLink = () => {
@@ -219,6 +231,13 @@ export default function CreateQuiz() {
                   {QUESTION_TYPES[slug]?.name}
                 </Badge>
               ))}
+            </div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+              {error}
             </div>
           )}
 

@@ -7,6 +7,33 @@ export interface QuestionTypeInfo {
 }
 
 export const QUESTION_TYPES: Record<string, QuestionTypeInfo> = {
+  "lsat-basics": {
+    slug: "lsat-basics",
+    name: "LSAT Basics",
+    chapter: 1,
+    description:
+      "Understand the format, structure, and scoring of the LSAT Logical Reasoning section",
+    exampleStem:
+      "Which one of the following most accurately describes a feature of LSAT Logical Reasoning questions?",
+  },
+  "argument-structure": {
+    slug: "argument-structure",
+    name: "Argument Structure",
+    chapter: 2,
+    description:
+      "Identify premises, conclusions, subsidiary conclusions, and the roles of statements within arguments",
+    exampleStem:
+      "Which one of the following best describes the role of the highlighted statement in the argument?",
+  },
+  "conditional-reasoning": {
+    slug: "conditional-reasoning",
+    name: "Conditional Reasoning",
+    chapter: 3,
+    description:
+      "Understand and apply conditional (if/then) logic, contrapositives, sufficient and necessary conditions",
+    exampleStem:
+      "If the statements above are true, which one of the following must also be true?",
+  },
   "must-be-true": {
     slug: "must-be-true",
     name: "Must Be True",
