@@ -93,22 +93,22 @@ export async function GET() {
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
-      .map((q) => ({
-        ...q,
-        attempts: index.attempts.filter((a) => a.quizId === q.id).length,
-        bestScore: Math.max(
-          ...index.attempts
-            .filter(
-              (a) =>
-                a.quizId === q.id &&
-                a.score !== null &&
-                (a.status === "completed" || a.status === "timed_out")
-            )
-            .map((a) =>
-              Math.round(((a.score ?? 0) / a.totalQuestions) * 100)
-            ),
-          0
-        ),
-      })),
+      .map((q) => {
+        const quizAttempts = index.attempts.filter((a) => a.quizId === q.id);
+        const completedAttempts = quizAttempts.filter(
+          (a) => a.score !== null && (a.status === "completed" || a.status === "timed_out")
+        );
+        const latestAttempt = completedAttempts.sort(
+          (a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime()
+        )[0];
+        return {
+          ...q,
+          attempts: quizAttempts.length,
+          bestScore: completedAttempts.length > 0
+            ? Math.max(...completedAttempts.map((a) => Math.round(((a.score ?? 0) / a.totalQuestions) * 100)))
+            : 0,
+          latestAttemptId: latestAttempt?.id ?? null,
+        };
+      }),
   });
 }
