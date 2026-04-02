@@ -106,14 +106,17 @@ export default function QuizTake() {
     if (!quiz) return;
     const q = quiz.questions[currentIndex];
     const timeSpent = Math.round((Date.now() - questionStartTime.current) / 1000);
-    setAnswers((prev) => ({
-      ...prev,
+    // Update ref directly so handleSubmit always has fresh time data
+    answersRef.current = {
+      ...answersRef.current,
       [q.id]: {
-        ...prev[q.id],
-        selectedAnswer: prev[q.id]?.selectedAnswer ?? null,
-        timeSpentSeconds: (prev[q.id]?.timeSpentSeconds ?? 0) + timeSpent,
+        ...answersRef.current[q.id],
+        selectedAnswer: answersRef.current[q.id]?.selectedAnswer ?? null,
+        timeSpentSeconds: (answersRef.current[q.id]?.timeSpentSeconds ?? 0) + timeSpent,
       },
-    }));
+    };
+    // Also update state for UI consistency
+    setAnswers(answersRef.current);
   }, [quiz, currentIndex]);
 
   const selectAnswer = (questionId: string, letter: string) => {
@@ -156,6 +159,10 @@ export default function QuizTake() {
     setSubmitError("");
 
     try {
+      // Track time spent on the current question before submitting
+      trackQuestionTime();
+      questionStartTime.current = Date.now(); // reset so it doesn't double-count
+
       // Read from ref (always up-to-date) and merge with localStorage as safety net
       const finalAnswers: AnswerMap = { ...answersRef.current };
 
