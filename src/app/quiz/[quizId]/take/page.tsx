@@ -49,6 +49,7 @@ export default function QuizTake() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const questionStartTime = useRef<number>(Date.now());
+  const answersRef = useRef<AnswerMap>({});
 
   // Load quiz and attempt data
   useEffect(() => {
@@ -93,8 +94,9 @@ export default function QuizTake() {
     return () => clearInterval(interval);
   }, [startedAt]);
 
-  // Save answers to localStorage on change
+  // Keep ref in sync and save to localStorage on change
   useEffect(() => {
+    answersRef.current = answers;
     if (attemptId && Object.keys(answers).length > 0) {
       localStorage.setItem(`answers-${attemptId}`, JSON.stringify(answers));
     }
@@ -115,6 +117,16 @@ export default function QuizTake() {
   }, [quiz, currentIndex]);
 
   const selectAnswer = (questionId: string, letter: string) => {
+    // Update ref immediately (no waiting for React batch)
+    answersRef.current = {
+      ...answersRef.current,
+      [questionId]: {
+        ...answersRef.current[questionId],
+        selectedAnswer: letter,
+        timeSpentSeconds: answersRef.current[questionId]?.timeSpentSeconds ?? 0,
+      },
+    };
+    // Also update state for UI re-render
     setAnswers((prev) => ({
       ...prev,
       [questionId]: {
@@ -136,9 +148,21 @@ export default function QuizTake() {
 
   const handleSubmit = async (timedOut = false) => {
     setSubmitting(true);
-    trackQuestionTime();
 
-    const finalAnswers = { ...answers };
+    // Read from ref (always up-to-date) and merge with localStorage as safety net
+    let finalAnswers: AnswerMap = { ...answersRef.current };
+
+    // Also check localStorage in case ref is stale
+    const saved = localStorage.getItem(`answers-${attemptId}`);
+    if (saved) {
+      const savedAnswers: AnswerMap = JSON.parse(saved);
+      for (const [qId, ans] of Object.entries(savedAnswers)) {
+        if (!finalAnswers[qId] || finalAnswers[qId].selectedAnswer === null) {
+          finalAnswers[qId] = ans;
+        }
+      }
+    }
+
     // Ensure all questions have entries
     if (quiz) {
       for (const q of quiz.questions) {
