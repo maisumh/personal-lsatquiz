@@ -35,6 +35,7 @@ interface DashboardData {
     attempts: number;
     bestScore: number;
     latestAttemptId: string | null;
+    lastTakenAt: string | null;
   }[];
 }
 
@@ -169,8 +170,10 @@ export default function AdminDashboard() {
                       {quiz.title}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(quiz.createdAt).toLocaleDateString()} &middot;{" "}
-                      {quiz.questionCount} questions
+                      {quiz.lastTakenAt
+                        ? `Taken ${new Date(quiz.lastTakenAt).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+                        : `Created ${new Date(quiz.createdAt).toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric" })}`}
+                      {" "}&middot; {quiz.questionCount} questions
                     </p>
                   </div>
                 </div>

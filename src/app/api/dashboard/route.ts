@@ -110,6 +110,7 @@ export async function GET() {
             ? Math.max(...completedAttempts.map((a) => Math.round(((a.score ?? 0) / a.totalQuestions) * 100)))
             : 0,
           latestAttemptId: latestAttempt?.id ?? null,
+          lastTakenAt: latestAttempt?.completedAt ?? null,
         };
       }),
   });
