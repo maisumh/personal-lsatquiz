@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getQuiz } from "@/lib/blob";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ quizId: string }> }
