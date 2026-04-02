@@ -3,11 +3,29 @@ import type { Quiz, Attempt, IndexEntry } from "./types";
 
 const BLOB_PREFIX = "lsat/";
 
+// Cache blob URLs in memory to avoid list() calls on read-after-write
+const urlCache = new Map<string, string>();
+
 async function readBlob<T>(path: string): Promise<T | null> {
   try {
-    const { blobs } = await list({ prefix: BLOB_PREFIX + path });
-    if (blobs.length === 0) return null;
-    const response = await fetch(blobs[0].url);
+    const fullPath = BLOB_PREFIX + path;
+
+    // Check in-memory cache first (for read-after-write consistency)
+    let url = urlCache.get(fullPath);
+
+    if (!url) {
+      const { blobs } = await list({ prefix: fullPath });
+      // Find exact match to avoid prefix collisions
+      const exact = blobs.find((b) => b.pathname === fullPath);
+      if (!exact) return null;
+      url = exact.url;
+    }
+
+    // Always bypass fetch cache to get fresh data
+    const response = await fetch(url + "?t=" + Date.now(), {
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
     return response.json() as Promise<T>;
   } catch {
     return null;
@@ -15,16 +33,18 @@ async function readBlob<T>(path: string): Promise<T | null> {
 }
 
 async function writeBlob(path: string, data: unknown): Promise<string> {
-  // Delete existing blob at this path first
-  const { blobs } = await list({ prefix: BLOB_PREFIX + path });
-  for (const blob of blobs) {
-    await del(blob.url);
-  }
-  const blob = await put(BLOB_PREFIX + path, JSON.stringify(data), {
+  const fullPath = BLOB_PREFIX + path;
+
+  // put with addRandomSuffix: false overwrites at the same path
+  const blob = await put(fullPath, JSON.stringify(data), {
     access: "public",
     contentType: "application/json",
     addRandomSuffix: false,
   });
+
+  // Cache the URL for immediate read-after-write consistency
+  urlCache.set(fullPath, blob.url);
+
   return blob.url;
 }
 
