@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 type Mode = "quiz" | "exam";
-type Step = "build" | "done";
 
 interface Chapter {
   slug: string;
@@ -18,7 +24,7 @@ interface Chapter {
 const PRESET_TIMES = [15, 25, 35, 45];
 
 export default function CreateQuiz() {
-  const [step, setStep] = useState<Step>("build");
+  const router = useRouter();
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(true);
 
@@ -26,12 +32,10 @@ export default function CreateQuiz() {
   const [mode, setMode] = useState<Mode>("quiz");
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [timeMinutes, setTimeMinutes] = useState<number>(35);
-  const [customTitle, setCustomTitle] = useState<string>("");
+  const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const [quizLink, setQuizLink] = useState("");
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch("/api/chapters")
@@ -90,11 +94,10 @@ export default function CreateQuiz() {
     setError("");
 
     try {
-      const res = await fetch("/api/quiz/create", {
+      const createRes = await fetch("/api/quiz/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: customTitle.trim() || undefined,
           type: mode,
           questionTypes: Array.from(selectedSlugs),
           questionCount,
@@ -102,94 +105,33 @@ export default function CreateQuiz() {
         }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error (${res.status})`);
+      if (!createRes.ok) {
+        const errData = await createRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error (${createRes.status})`);
       }
 
-      const data = await res.json();
-      setQuizLink(`${window.location.origin}/quiz/${data.id}`);
-      setStep("done");
+      const quiz = await createRes.json();
+
+      // Immediately start an attempt and go straight into the take page
+      const startRes = await fetch("/api/attempt/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: quiz.id }),
+      });
+
+      if (!startRes.ok) throw new Error("Could not start attempt");
+
+      const { attemptId, startedAt, timeLimitSeconds } = await startRes.json();
+      sessionStorage.setItem(
+        `attempt-${quiz.id}`,
+        JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
+      );
+      router.push(`/quiz/${quiz.id}/take`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create quiz");
-    } finally {
       setCreating(false);
     }
   };
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(quizLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // ─── Done step ──────────────────────────────────────────────────
-  if (step === "done") {
-    return (
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="paper-card p-8 md:p-12 max-w-lg w-full text-center page-enter">
-          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[color:var(--sage)] flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-[color:var(--sage-foreground)]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h1 className="font-display text-3xl mb-2">Ready to share.</h1>
-          <p className="text-muted-foreground mb-6 serif-italic">
-            Send the link below when you&apos;re ready to begin.
-          </p>
-          <div className="flex gap-2 mb-6">
-            <Input
-              readOnly
-              value={quizLink}
-              className="glass text-sm font-mono"
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-            />
-            <Button
-              onClick={copyLink}
-              className={`shrink-0 min-w-[88px] border-0 transition-all tap-target ${
-                copied
-                  ? "bg-[color:var(--sage)] text-[color:var(--sage-foreground)]"
-                  : "bg-primary text-primary-foreground"
-              }`}
-            >
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          <div className="flex gap-3">
-            <a
-              href="/admin"
-              className="flex-1 inline-flex items-center justify-center h-10 rounded-xl border border-border hover:bg-accent transition-colors text-sm font-medium tap-target"
-            >
-              Dashboard
-            </a>
-            <Button
-              onClick={() => {
-                setQuizLink("");
-                setSelectedSlugs(new Set());
-                setCustomTitle("");
-                setCopied(false);
-                setStep("build");
-              }}
-              variant="outline"
-              className="flex-1 h-10 rounded-xl tap-target"
-            >
-              Create Another
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ─── Build step ─────────────────────────────────────────────────
   return (
@@ -235,65 +177,142 @@ export default function CreateQuiz() {
         label="Chapters"
         hint={
           selectedSlugs.size === 0
-            ? "Pick one or more"
+            ? "tap to pick"
             : `${selectedSlugs.size} selected · ${totalAvailable} questions in pool`
         }
-        action={
-          <div className="flex gap-3 text-xs">
-            <button
-              onClick={selectAll}
-              className="text-muted-foreground hover:text-foreground transition-colors serif-italic"
-            >
-              all
-            </button>
-            <span className="text-muted-foreground">·</span>
-            <button
-              onClick={clearAll}
-              className="text-muted-foreground hover:text-foreground transition-colors serif-italic"
-            >
-              clear
-            </button>
-          </div>
-        }
       >
-        {loadingChapters ? (
-          <div className="glass rounded-2xl p-6 shimmer">
-            <p className="text-muted-foreground">Loading chapters…</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          onClick={() => setChapterPickerOpen(true)}
+          disabled={loadingChapters}
+          className="tap-target w-full p-4 rounded-2xl border border-border bg-secondary/40 hover:bg-secondary/60 transition-colors flex items-center justify-between gap-3 text-left disabled:opacity-50"
+        >
+          <span className="flex-1 min-w-0">
+            {loadingChapters ? (
+              <span className="serif-italic text-muted-foreground">
+                Loading chapters…
+              </span>
+            ) : selectedSlugs.size === 0 ? (
+              <span className="serif-italic text-muted-foreground">
+                Select one or more chapters
+              </span>
+            ) : (
+              <span className="text-sm font-medium truncate block">
+                {Array.from(selectedSlugs)
+                  .map(
+                    (slug) =>
+                      chapters.find((c) => c.slug === slug)?.name ?? slug
+                  )
+                  .join(" · ")}
+              </span>
+            )}
+          </span>
+          <svg
+            className="w-4 h-4 text-muted-foreground shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+      </Section>
+
+      <Dialog open={chapterPickerOpen} onOpenChange={setChapterPickerOpen}>
+        <DialogContent className="glass-strong border-primary/20 max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">
+              Chapters
+            </DialogTitle>
+            <DialogDescription>
+              <span className="flex items-center justify-between">
+                <span>
+                  {selectedSlugs.size === 0
+                    ? "none selected"
+                    : `${selectedSlugs.size} selected · ${totalAvailable} questions`}
+                </span>
+                <span className="flex gap-3 text-xs">
+                  <button
+                    onClick={selectAll}
+                    className="text-muted-foreground hover:text-foreground transition-colors serif-italic"
+                  >
+                    all
+                  </button>
+                  <span className="text-muted-foreground">·</span>
+                  <button
+                    onClick={clearAll}
+                    className="text-muted-foreground hover:text-foreground transition-colors serif-italic"
+                  >
+                    clear
+                  </button>
+                </span>
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 mt-2">
             {chapters.map((c) => {
               const selected = selectedSlugs.has(c.slug);
               return (
                 <button
                   key={c.slug}
                   onClick={() => toggleChapter(c.slug)}
-                  className={`tap-target p-4 rounded-xl border text-left transition-all ${
+                  className={`tap-target w-full p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
                     selected
-                      ? "bg-primary/8 border-primary/50 shadow-[0_2px_16px_-8px_var(--primary)]"
-                      : "glass border-transparent hover:border-primary/25"
+                      ? "bg-primary/8 border-primary/50"
+                      : "bg-transparent border-transparent hover:border-border"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="small-caps text-[10px] text-muted-foreground">
-                      Ch. {c.chapter}
-                    </span>
+                  <span
+                    className={`shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-all ${
+                      selected
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-border"
+                    }`}
+                  >
                     {selected && (
-                      <span className="text-primary text-xs">✓</span>
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={3}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
                     )}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold font-display leading-tight truncate">
+                      {c.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground serif-italic">
+                      Ch. {c.chapter} · {c.count} questions
+                    </p>
                   </div>
-                  <p className="text-sm font-semibold font-display leading-tight">
-                    {c.name}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-1 serif-italic">
-                    {c.count} questions
-                  </p>
                 </button>
               );
             })}
           </div>
-        )}
-      </Section>
+          <Button
+            onClick={() => setChapterPickerOpen(false)}
+            className="w-full h-12 mt-4 bg-primary text-primary-foreground tap-target"
+            disabled={selectedSlugs.size === 0}
+          >
+            {selectedSlugs.size === 0
+              ? "Pick at least one"
+              : `Done · ${selectedSlugs.size}`}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* Question count ────────────────────────────────────────── */}
       <Section
@@ -370,16 +389,6 @@ export default function CreateQuiz() {
         </Section>
       )}
 
-      {/* Optional title ───────────────────────────────────────── */}
-      <Section label="Title" hint="optional">
-        <Input
-          value={customTitle}
-          onChange={(e) => setCustomTitle(e.target.value)}
-          placeholder="Auto-generated from chapters"
-          className="glass"
-        />
-      </Section>
-
       {error && (
         <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm mb-4">
           {error}
@@ -395,10 +404,10 @@ export default function CreateQuiz() {
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 border-0 disabled:opacity-40 tap-target"
           >
             {creating
-              ? "Creating…"
+              ? "Starting…"
               : selectedSlugs.size === 0
                 ? "Pick at least one chapter"
-                : `Create ${mode === "exam" ? "exam" : "practice set"} · ${questionCount}q`}
+                : `Begin ${mode === "exam" ? "exam" : "practice"} · ${questionCount}q`}
           </Button>
         </div>
       </div>

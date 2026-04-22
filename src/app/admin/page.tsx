@@ -56,6 +56,7 @@ export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [drillingSlug, setDrillingSlug] = useState<string | null>(null);
+  const [startingQuizId, setStartingQuizId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/dashboard", { cache: "no-store" })
@@ -63,6 +64,26 @@ export default function AdminDashboard() {
       .then(setData)
       .finally(() => setLoading(false));
   }, []);
+
+  const startQuizAttempt = async (quizId: string) => {
+    setStartingQuizId(quizId);
+    try {
+      const res = await fetch("/api/attempt/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId }),
+      });
+      if (!res.ok) throw new Error("start failed");
+      const { attemptId, startedAt, timeLimitSeconds } = await res.json();
+      sessionStorage.setItem(
+        `attempt-${quizId}`,
+        JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
+      );
+      router.push(`/quiz/${quizId}/take`);
+    } catch {
+      setStartingQuizId(null);
+    }
+  };
 
   const startDrill = async (slug: string) => {
     setDrillingSlug(slug);
@@ -299,22 +320,19 @@ export default function AdminDashboard() {
                   {quiz.latestAttemptId && (
                     <a
                       href={`/quiz/${quiz.id}/results/${quiz.latestAttemptId}`}
-                      className="p-2 rounded-lg hover:bg-accent transition-colors"
+                      className="p-2 rounded-lg hover:bg-accent transition-colors tap-target flex items-center justify-center"
                       title="View latest results"
                     >
                       <EyeIcon />
                     </a>
                   )}
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${window.location.origin}/quiz/${quiz.id}`
-                      );
-                    }}
-                    className="p-2 rounded-lg hover:bg-accent transition-colors"
-                    title="Copy link"
+                    onClick={() => startQuizAttempt(quiz.id)}
+                    disabled={startingQuizId === quiz.id}
+                    className="h-10 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors tap-target text-xs font-semibold disabled:opacity-60"
+                    title="Take this set again"
                   >
-                    <LinkIcon />
+                    {startingQuizId === quiz.id ? "…" : "Take"}
                   </button>
                 </div>
               </div>
@@ -378,21 +396,4 @@ function EyeIcon() {
   );
 }
 
-function LinkIcon() {
-  return (
-    <svg
-      className="w-4 h-4 text-muted-foreground"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.5}
-        d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-4.455a4.5 4.5 0 00-6.364-6.364L4.5 6.775a4.5 4.5 0 001.242 7.244"
-      />
-    </svg>
-  );
-}
 
