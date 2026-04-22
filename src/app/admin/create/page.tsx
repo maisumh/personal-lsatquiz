@@ -36,6 +36,7 @@ export default function CreateQuiz() {
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [orphanedQuizId, setOrphanedQuizId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/chapters")
@@ -88,10 +89,41 @@ export default function CreateQuiz() {
     setSelectedSlugs(new Set());
   };
 
+  const startAttemptFor = async (quizId: string) => {
+    const startRes = await fetch("/api/attempt/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quizId }),
+    });
+    if (!startRes.ok) throw new Error("Could not start attempt");
+    const { attemptId, startedAt, timeLimitSeconds } = await startRes.json();
+    sessionStorage.setItem(
+      `attempt-${quizId}`,
+      JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
+    );
+    router.push(`/quiz/${quizId}/take`);
+  };
+
   const handleCreate = async () => {
     if (selectedSlugs.size === 0) return;
     setCreating(true);
     setError("");
+    setOrphanedQuizId(null);
+
+    // If we have a partially-created quiz from a prior failed attempt, just
+    // retry the start leg instead of creating a new quiz.
+    if (orphanedQuizId) {
+      try {
+        await startAttemptFor(orphanedQuizId);
+        return;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not start attempt"
+        );
+        setCreating(false);
+        return;
+      }
+    }
 
     try {
       const createRes = await fetch("/api/quiz/create", {
@@ -112,21 +144,15 @@ export default function CreateQuiz() {
 
       const quiz = await createRes.json();
 
-      // Immediately start an attempt and go straight into the take page
-      const startRes = await fetch("/api/attempt/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quizId: quiz.id }),
-      });
-
-      if (!startRes.ok) throw new Error("Could not start attempt");
-
-      const { attemptId, startedAt, timeLimitSeconds } = await startRes.json();
-      sessionStorage.setItem(
-        `attempt-${quiz.id}`,
-        JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
-      );
-      router.push(`/quiz/${quiz.id}/take`);
+      try {
+        await startAttemptFor(quiz.id);
+      } catch (startErr) {
+        // The quiz exists in blob storage but the attempt didn't start.
+        // Hold its id so the user can retry the start leg without losing
+        // the config they just built.
+        setOrphanedQuizId(quiz.id);
+        throw startErr;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create quiz");
       setCreating(false);
@@ -305,10 +331,9 @@ export default function CreateQuiz() {
           <Button
             onClick={() => setChapterPickerOpen(false)}
             className="w-full h-12 mt-4 bg-primary text-primary-foreground tap-target"
-            disabled={selectedSlugs.size === 0}
           >
             {selectedSlugs.size === 0
-              ? "Pick at least one"
+              ? "Close"
               : `Done · ${selectedSlugs.size}`}
           </Button>
         </DialogContent>
@@ -392,6 +417,11 @@ export default function CreateQuiz() {
       {error && (
         <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm mb-4">
           {error}
+          {orphanedQuizId && (
+            <span className="block mt-1 text-foreground/70 serif-italic">
+              Your set was saved. Tap Begin again to retry.
+            </span>
+          )}
         </div>
       )}
 

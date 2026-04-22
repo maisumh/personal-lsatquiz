@@ -27,12 +27,14 @@ See `src/lib/types.ts` for the full shape.
 
 ### Data flow
 
-1. **Create quiz** (`/admin/create` → `POST /api/quiz/create`): pick chapters, count, mode. Saves a `Quiz` config only — no questions.
+The dashboard admin is also the test-taker, so there's no share-a-link step. Every entry point starts an attempt and jumps straight into `/take`.
+
+1. **Create** (`/admin/create` → `POST /api/quiz/create` → `POST /api/attempt/start`): pick chapters via the dropdown modal, count, mode. Server saves a `Quiz` config (no questions), then the client immediately requests an attempt and pushes to `/quiz/[id]/take`. If create succeeds but start fails, the client holds the quiz id and the next Begin tap retries only the start leg.
 2. **Start attempt** (`POST /api/attempt/start`): server samples questions via `src/lib/sampling.ts`, stores them on the attempt.
 3. **Take** (`/quiz/[quizId]/take`): fetches `GET /api/attempt/[id]?view=take` for questions. Answers tracked in `answersRef` + `localStorage`. Exam mode shows countdown; auto-submits at 0:00.
 4. **Submit** (`POST /api/attempt/[id]/submit`): grades against the attempt's own question snapshot. Server enforces timeout via `startedAt + timeLimitSeconds` with 2s grace. Returns full results payload.
 5. **Results** (`/quiz/[quizId]/results/[attemptId]`): reads from `sessionStorage.latest-quiz-results` first, falls back to `GET /api/attempt/[id]`. Notes autosave via debounced `PATCH`; unmount flushes pending save with `keepalive`.
-6. **Dashboard** (`/admin` → `GET /api/dashboard`): aggregates weak chapters, scores, flagged/missed counts.
+6. **Dashboard** (`/admin` → `GET /api/dashboard`): weak chapters, scores, flagged/missed counts. "Recent sets" row has a primary **Take** button that starts a fresh attempt and pushes to `/take` — no copy-link.
 7. **Library** (`/library`): flagged + missed across all attempts, with bulk-drill from `POST /api/drill`.
 8. **Drill** (`POST /api/drill`): spawns a new attempt in three kinds — `wrong-only`, `drill` (chapter pool), `questions` (specific IDs).
 

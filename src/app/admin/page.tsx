@@ -57,6 +57,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [drillingSlug, setDrillingSlug] = useState<string | null>(null);
   const [startingQuizId, setStartingQuizId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/dashboard", { cache: "no-store" })
@@ -67,26 +68,31 @@ export default function AdminDashboard() {
 
   const startQuizAttempt = async (quizId: string) => {
     setStartingQuizId(quizId);
+    setActionError(null);
     try {
       const res = await fetch("/api/attempt/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quizId }),
       });
-      if (!res.ok) throw new Error("start failed");
+      if (!res.ok) throw new Error(`Could not start attempt (${res.status})`);
       const { attemptId, startedAt, timeLimitSeconds } = await res.json();
       sessionStorage.setItem(
         `attempt-${quizId}`,
         JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
       );
       router.push(`/quiz/${quizId}/take`);
-    } catch {
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Could not start attempt"
+      );
       setStartingQuizId(null);
     }
   };
 
   const startDrill = async (slug: string) => {
     setDrillingSlug(slug);
+    setActionError(null);
     try {
       const res = await fetch("/api/drill", {
         method: "POST",
@@ -98,14 +104,17 @@ export default function AdminDashboard() {
           mode: "quiz",
         }),
       });
-      if (!res.ok) throw new Error("drill failed");
+      if (!res.ok) throw new Error(`Could not start drill (${res.status})`);
       const { attemptId, quizId, startedAt, timeLimitSeconds } = await res.json();
       sessionStorage.setItem(
         `attempt-${quizId}`,
         JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
       );
       router.push(`/quiz/${quizId}/take`);
-    } catch {
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Could not start drill"
+      );
       setDrillingSlug(null);
     }
   };
@@ -153,6 +162,19 @@ export default function AdminDashboard() {
           </Button>
         </a>
       </header>
+
+      {actionError && (
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm mb-6 flex items-start justify-between gap-3">
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-destructive/70 hover:text-destructive shrink-0"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* ─── Summary ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
