@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { QUESTION_BANK } from "@/lib/data/question-bank";
 import { saveQuiz } from "@/lib/blob";
-import { generateId, pickQuestions, distributeCount } from "@/lib/utils";
-import type { Quiz, QuizQuestion } from "@/lib/types";
+import { generateId } from "@/lib/utils";
+import { countAvailableQuestions } from "@/lib/sampling";
+import type { Quiz } from "@/lib/types";
+import { QUESTION_TYPES } from "@/lib/constants/question-types";
+
+const DEFAULTS = {
+  quiz: { count: 10, minutes: 15 },
+  exam: { count: 25, minutes: 35 }, // LSAT-authentic
+};
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -10,59 +16,54 @@ export async function POST(request: Request) {
     title,
     type = "quiz",
     questionTypes,
+    questionCount,
     timeLimitMinutes,
   } = body as {
     title?: string;
     type: "quiz" | "exam";
     questionTypes: string[];
+    questionCount?: number;
     timeLimitMinutes?: number;
   };
 
   if (!questionTypes || questionTypes.length === 0) {
     return NextResponse.json(
-      { error: "At least one question type is required" },
+      { error: "At least one chapter is required" },
       { status: 400 }
     );
   }
 
-  const totalQuestions = type === "quiz" ? 10 : 30;
-  const timeLimit = timeLimitMinutes ?? (type === "quiz" ? 15 : 45);
-
-  // Distribute questions across selected types
-  const distribution = distributeCount(questionTypes, totalQuestions);
-
-  const selectedQuestions: QuizQuestion[] = [];
-  let questionNumber = 1;
-
-  for (const [qType, count] of Object.entries(distribution)) {
-    const bank = QUESTION_BANK[qType];
-    if (!bank || bank.length === 0) continue;
-
-    const picked = pickQuestions(bank, Math.min(count, bank.length));
-    for (const q of picked) {
-      selectedQuestions.push({
-        ...q,
-        questionNumber: questionNumber++,
-      });
-    }
+  const defaults = DEFAULTS[type] ?? DEFAULTS.quiz;
+  const available = countAvailableQuestions(questionTypes);
+  if (available === 0) {
+    return NextResponse.json(
+      { error: "No questions available in the selected chapters" },
+      { status: 400 }
+    );
   }
 
-  // Shuffle final question order
-  selectedQuestions.sort(() => Math.random() - 0.5);
-  selectedQuestions.forEach((q, i) => (q.questionNumber = i + 1));
+  const count = Math.max(
+    1,
+    Math.min(questionCount ?? defaults.count, available)
+  );
+  const minutes = Math.max(1, timeLimitMinutes ?? defaults.minutes);
+
+  const derivedTitle =
+    title?.trim() ||
+    (questionTypes.length === 1
+      ? `Ch. ${QUESTION_TYPES[questionTypes[0]]?.chapter ?? ""}: ${
+          QUESTION_TYPES[questionTypes[0]]?.name ?? questionTypes[0]
+        }`
+      : `${questionTypes.length} chapters · mixed`);
 
   const quiz: Quiz = {
     id: generateId(),
-    title:
-      title ||
-      questionTypes
-        .map((t) => t.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
-        .join(" + "),
+    title: derivedTitle,
     type,
     questionTypes,
-    timeLimitMinutes: timeLimit,
+    questionCount: count,
+    timeLimitMinutes: minutes,
     createdAt: new Date().toISOString(),
-    questions: selectedQuestions,
   };
 
   try {
@@ -78,7 +79,8 @@ export async function POST(request: Request) {
   return NextResponse.json({
     id: quiz.id,
     title: quiz.title,
-    questionCount: quiz.questions.length,
+    type: quiz.type,
+    questionCount: quiz.questionCount,
     timeLimitMinutes: quiz.timeLimitMinutes,
   });
 }

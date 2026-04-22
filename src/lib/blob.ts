@@ -1,4 +1,4 @@
-import { put, list, del } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
 import type { Quiz, Attempt, IndexEntry } from "./types";
 
 const BLOB_PREFIX = "lsat/";
@@ -10,18 +10,15 @@ async function readBlob<T>(path: string): Promise<T | null> {
   try {
     const fullPath = BLOB_PREFIX + path;
 
-    // Check in-memory cache first (for read-after-write consistency)
     let url = urlCache.get(fullPath);
 
     if (!url) {
       const { blobs } = await list({ prefix: fullPath });
-      // Find exact match to avoid prefix collisions
       const exact = blobs.find((b) => b.pathname === fullPath);
       if (!exact) return null;
       url = exact.url;
     }
 
-    // Always bypass fetch cache to get fresh data
     const response = await fetch(url + "?t=" + Date.now(), {
       cache: "no-store",
     });
@@ -42,7 +39,6 @@ async function writeBlob(path: string, data: unknown): Promise<string> {
     allowOverwrite: true,
   });
 
-  // Cache the URL for immediate read-after-write consistency
   urlCache.set(fullPath, blob.url);
 
   return blob.url;
@@ -51,14 +47,6 @@ async function writeBlob(path: string, data: unknown): Promise<string> {
 // Quiz operations
 export async function saveQuiz(quiz: Quiz): Promise<void> {
   await writeBlob(`quizzes/${quiz.id}.json`, quiz);
-  await addToIndex("quiz", {
-    id: quiz.id,
-    title: quiz.title,
-    type: quiz.type,
-    questionTypes: quiz.questionTypes,
-    createdAt: quiz.createdAt,
-    questionCount: quiz.questions.length,
-  });
 }
 
 export async function getQuiz(quizId: string): Promise<Quiz | null> {
@@ -66,61 +54,119 @@ export async function getQuiz(quizId: string): Promise<Quiz | null> {
 }
 
 // Attempt operations
-export async function saveAttempt(attempt: Attempt, quizTitle: string): Promise<void> {
+export async function saveAttempt(attempt: Attempt): Promise<void> {
   await writeBlob(`attempts/${attempt.id}.json`, attempt);
-  await addToIndex("attempt", {
-    id: attempt.id,
-    quizId: attempt.quizId,
-    quizTitle,
-    score: attempt.score,
-    totalQuestions: attempt.totalQuestions,
-    completedAt: attempt.completedAt,
-    status: attempt.status,
-  });
 }
 
 export async function getAttempt(attemptId: string): Promise<Attempt | null> {
   return readBlob<Attempt>(`attempts/${attemptId}.json`);
 }
 
-export async function updateAttempt(attempt: Attempt, quizTitle: string): Promise<void> {
+export async function updateAttempt(attempt: Attempt): Promise<void> {
   await writeBlob(`attempts/${attempt.id}.json`, attempt);
-  // Upsert the index entry (add if not found, update if found)
-  const index = await getIndex();
-  const entry = {
-    id: attempt.id,
-    quizId: attempt.quizId,
-    quizTitle,
-    score: attempt.score,
-    totalQuestions: attempt.totalQuestions,
-    completedAt: attempt.completedAt,
-    status: attempt.status,
-  };
-  const idx = index.attempts.findIndex((a) => a.id === attempt.id);
-  if (idx !== -1) {
-    index.attempts[idx] = entry;
-  } else {
-    // Attempt wasn't in index (stale read) — add it
-    index.attempts.push(entry);
-  }
-  await writeBlob("index.json", index);
 }
 
-// Index operations
+/**
+ * Returns the graded questions for an attempt. Works for both the new model
+ * (questions stored on the attempt) and legacy (questions stored on the quiz).
+ *
+ * For a legacy attempt whose parent quiz has since been migrated (no
+ * `questions[]` on the quiz), we cannot reconstruct the exact original
+ * selection — the random seed is lost. The caller should treat an empty
+ * return as "this attempt is unrecoverable" and surface a clear error rather
+ * than silently grading zero questions.
+ */
+export async function getAttemptQuestions(attempt: Attempt) {
+  if (attempt.questions && attempt.questions.length > 0) {
+    return attempt.questions;
+  }
+  const quiz = await getQuiz(attempt.quizId);
+  if (quiz?.questions && quiz.questions.length > 0) {
+    return quiz.questions;
+  }
+  return [];
+}
+
+// Index — rebuilt on every call to avoid read-modify-write races
 export async function getIndex(): Promise<IndexEntry> {
-  const index = await readBlob<IndexEntry>("index.json");
-  return index || { quizzes: [], attempts: [] };
+  const [quizList, attemptList] = await Promise.all([
+    list({ prefix: BLOB_PREFIX + "quizzes/" }),
+    list({ prefix: BLOB_PREFIX + "attempts/" }),
+  ]);
+
+  const quizzes = (
+    await Promise.all(
+      quizList.blobs.map(async (blob) => {
+        try {
+          const res = await fetch(blob.url + "?t=" + Date.now(), {
+            cache: "no-store",
+          });
+          if (!res.ok) return null;
+          return (await res.json()) as Quiz;
+        } catch {
+          return null;
+        }
+      })
+    )
+  ).filter(Boolean) as Quiz[];
+
+  const attempts = (
+    await Promise.all(
+      attemptList.blobs.map(async (blob) => {
+        try {
+          const res = await fetch(blob.url + "?t=" + Date.now(), {
+            cache: "no-store",
+          });
+          if (!res.ok) return null;
+          return (await res.json()) as Attempt;
+        } catch {
+          return null;
+        }
+      })
+    )
+  ).filter(Boolean) as Attempt[];
+
+  const quizTitleMap = new Map(quizzes.map((q) => [q.id, q.title]));
+
+  return {
+    quizzes: quizzes.map((q) => ({
+      id: q.id,
+      title: q.title,
+      type: q.type,
+      questionTypes: q.questionTypes,
+      createdAt: q.createdAt,
+      questionCount: q.questionCount ?? q.questions?.length ?? 0,
+    })),
+    attempts: attempts.map((a) => ({
+      id: a.id,
+      quizId: a.quizId,
+      quizTitle: a.quizTitle ?? quizTitleMap.get(a.quizId) ?? "Unknown Quiz",
+      score: a.score,
+      totalQuestions: a.totalQuestions,
+      completedAt: a.completedAt,
+      status: a.status,
+      mode: a.mode,
+    })),
+  };
 }
 
-async function addToIndex(
-  type: "quiz" | "attempt",
-  entry: IndexEntry["quizzes"][0] | IndexEntry["attempts"][0]
-): Promise<void> {
-  const index = await getIndex();
-  if (type === "quiz") {
-    index.quizzes.push(entry as IndexEntry["quizzes"][0]);
-  } else {
-    index.attempts.push(entry as IndexEntry["attempts"][0]);
-  }
-  await writeBlob("index.json", index);
+/**
+ * Raw attempt list — used when dashboard needs full answer + flag data.
+ */
+export async function listAttempts(): Promise<Attempt[]> {
+  const { blobs } = await list({ prefix: BLOB_PREFIX + "attempts/" });
+  const attempts = await Promise.all(
+    blobs.map(async (blob) => {
+      try {
+        const res = await fetch(blob.url + "?t=" + Date.now(), {
+          cache: "no-store",
+        });
+        if (!res.ok) return null;
+        return (await res.json()) as Attempt;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return attempts.filter(Boolean) as Attempt[];
 }

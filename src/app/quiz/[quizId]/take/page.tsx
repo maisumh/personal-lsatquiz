@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatTime } from "@/lib/utils";
 import { QUESTION_TYPES } from "@/lib/constants/question-types";
+import { useSwipe } from "@/lib/hooks/use-swipe";
 
 interface QuizQuestion {
   id: string;
@@ -23,12 +23,16 @@ interface QuizQuestion {
   choices: { A: string; B: string; C: string; D: string; E: string };
 }
 
-interface QuizData {
+interface AttemptView {
   id: string;
-  title: string;
-  type: string;
-  timeLimitMinutes: number;
+  quizId: string;
+  quizTitle: string | null;
+  mode: "quiz" | "exam";
+  startedAt: string;
+  timeLimitSeconds: number | null;
+  totalQuestions: number;
   questions: QuizQuestion[];
+  flaggedQuestionIds: string[];
 }
 
 type AnswerMap = Record<
@@ -39,62 +43,96 @@ type AnswerMap = Record<
 export default function QuizTake() {
   const params = useParams();
   const router = useRouter();
-  const [quiz, setQuiz] = useState<QuizData | null>(null);
+
+  const [attempt, setAttempt] = useState<AttemptView | null>(null);
+  const [attemptId, setAttemptId] = useState<string>("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
-  const [timeElapsed, setTimeElapsed] = useState<number>(0);
-  const [attemptId, setAttemptId] = useState<string>("");
-  const [startedAt, setStartedAt] = useState<string>("");
+  const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [elapsed, setElapsed] = useState(0);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitError, setSubmitError] = useState("");
+  const [direction, setDirection] = useState<1 | -1>(1);
+
   const questionStartTime = useRef<number>(Date.now());
   const answersRef = useRef<AnswerMap>({});
+  const flaggedRef = useRef<Set<string>>(new Set());
+  const submittingRef = useRef(false);
+  const autoSubmitFired = useRef(false);
 
-  // Load quiz and attempt data
+  // ─── Load attempt ─────────────────────────────────────────────────
   useEffect(() => {
     const stored = sessionStorage.getItem(`attempt-${params.quizId}`);
     if (!stored) {
-      router.push(`/quiz/${params.quizId}`);
+      router.replace(`/quiz/${params.quizId}`);
       return;
     }
-    const { attemptId: aid, startedAt: sa } = JSON.parse(stored);
+    const { attemptId: aid } = JSON.parse(stored) as { attemptId: string };
     setAttemptId(aid);
-    setStartedAt(sa);
 
-    fetch(`/api/quiz/${params.quizId}`)
+    fetch(`/api/attempt/${aid}?view=take`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((data: QuizData) => {
-        setQuiz(data);
-        // Restore answers from localStorage
+      .then((data: AttemptView) => {
+        setAttempt(data);
         const savedAnswers = localStorage.getItem(`answers-${aid}`);
         if (savedAnswers) {
-          setAnswers(JSON.parse(savedAnswers));
+          const parsed = JSON.parse(savedAnswers);
+          setAnswers(parsed);
+          answersRef.current = parsed;
         }
-        // Restore current question index
+        const savedFlags = localStorage.getItem(`flagged-${aid}`);
+        if (savedFlags) {
+          const set = new Set<string>(JSON.parse(savedFlags));
+          setFlagged(set);
+          flaggedRef.current = set;
+        } else if (data.flaggedQuestionIds?.length) {
+          const set = new Set(data.flaggedQuestionIds);
+          setFlagged(set);
+          flaggedRef.current = set;
+        }
         const savedIndex = localStorage.getItem(`index-${aid}`);
-        if (savedIndex) {
-          setCurrentIndex(parseInt(savedIndex, 10));
-        }
+        if (savedIndex) setCurrentIndex(parseInt(savedIndex, 10));
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, [params.quizId, router]);
 
-  // Timer (count up)
+  // ─── Apply exam-mode chrome globally while on this page ──────────
   useEffect(() => {
-    if (!startedAt) return;
+    if (attempt?.mode === "exam") {
+      document.documentElement.classList.add("exam-mode");
+      return () => document.documentElement.classList.remove("exam-mode");
+    }
+  }, [attempt?.mode]);
 
+  // ─── Tick timer ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!attempt) return;
+    const startedMs = new Date(attempt.startedAt).getTime();
     const interval = setInterval(() => {
-      const elapsed = Math.floor(
-        (Date.now() - new Date(startedAt).getTime()) / 1000
-      );
-      setTimeElapsed(elapsed);
+      const seconds = Math.floor((Date.now() - startedMs) / 1000);
+      setElapsed(seconds);
+      // Auto-submit on exam timeout. Claim the submit lock synchronously
+      // here so a concurrent manual submit sees it as busy.
+      if (
+        attempt.mode === "exam" &&
+        attempt.timeLimitSeconds != null &&
+        seconds >= attempt.timeLimitSeconds &&
+        !autoSubmitFired.current &&
+        !submittingRef.current
+      ) {
+        autoSubmitFired.current = true;
+        submittingRef.current = true;
+        void submitAttempt(true);
+      }
     }, 1000);
-
     return () => clearInterval(interval);
-  }, [startedAt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
 
-  // Keep ref in sync and save to localStorage on change
+  // ─── Persist answers + flags ─────────────────────────────────────
   useEffect(() => {
     answersRef.current = answers;
     if (attemptId && Object.keys(answers).length > 0) {
@@ -102,34 +140,47 @@ export default function QuizTake() {
     }
   }, [answers, attemptId]);
 
+  useEffect(() => {
+    flaggedRef.current = flagged;
+    if (attemptId) {
+      localStorage.setItem(
+        `flagged-${attemptId}`,
+        JSON.stringify(Array.from(flagged))
+      );
+    }
+  }, [flagged, attemptId]);
+
+  // ─── Time tracking per question ──────────────────────────────────
   const trackQuestionTime = useCallback(() => {
-    if (!quiz) return;
-    const q = quiz.questions[currentIndex];
-    const timeSpent = Math.round((Date.now() - questionStartTime.current) / 1000);
-    // Update ref directly so handleSubmit always has fresh time data
+    if (!attempt) return;
+    const q = attempt.questions[currentIndex];
+    if (!q) return;
+    const timeSpent = Math.round(
+      (Date.now() - questionStartTime.current) / 1000
+    );
     answersRef.current = {
       ...answersRef.current,
       [q.id]: {
         ...answersRef.current[q.id],
         selectedAnswer: answersRef.current[q.id]?.selectedAnswer ?? null,
-        timeSpentSeconds: (answersRef.current[q.id]?.timeSpentSeconds ?? 0) + timeSpent,
+        timeSpentSeconds:
+          (answersRef.current[q.id]?.timeSpentSeconds ?? 0) + timeSpent,
       },
     };
-    // Also update state for UI consistency
     setAnswers(answersRef.current);
-  }, [quiz, currentIndex]);
+  }, [attempt, currentIndex]);
 
   const selectAnswer = (questionId: string, letter: string) => {
-    // Update ref immediately (no waiting for React batch)
+    if (navigator.vibrate) navigator.vibrate(8);
     answersRef.current = {
       ...answersRef.current,
       [questionId]: {
         ...answersRef.current[questionId],
         selectedAnswer: letter,
-        timeSpentSeconds: answersRef.current[questionId]?.timeSpentSeconds ?? 0,
+        timeSpentSeconds:
+          answersRef.current[questionId]?.timeSpentSeconds ?? 0,
       },
     };
-    // Also update state for UI re-render
     setAnswers((prev) => ({
       ...prev,
       [questionId]: {
@@ -140,7 +191,21 @@ export default function QuizTake() {
     }));
   };
 
+  const toggleFlag = (questionId: string) => {
+    if (navigator.vibrate) navigator.vibrate(12);
+    setFlagged((prev) => {
+      const next = new Set(prev);
+      if (next.has(questionId)) next.delete(questionId);
+      else next.add(questionId);
+      flaggedRef.current = next;
+      return next;
+    });
+  };
+
   const goToQuestion = (index: number) => {
+    if (!attempt) return;
+    if (index < 0 || index >= attempt.questions.length) return;
+    setDirection(index > currentIndex ? 1 : -1);
     trackQuestionTime();
     setCurrentIndex(index);
     questionStartTime.current = Date.now();
@@ -149,24 +214,20 @@ export default function QuizTake() {
     }
   };
 
-  const [submitError, setSubmitError] = useState("");
-  const submittingRef = useRef(false);
-
-  const handleSubmit = async (timedOut = false) => {
-    if (submittingRef.current) return; // prevent double-submission
-    submittingRef.current = true;
+  // ─── Submit ───────────────────────────────────────────────────────
+  // The auto-submit branch claims submittingRef synchronously before calling
+  // this. Manual submit sets it here. JS is single-threaded so the two
+  // paths can't interleave — whichever fires first wins.
+  const submitAttempt = async (timedOut: boolean) => {
+    if (!submittingRef.current) submittingRef.current = true;
     setSubmitting(true);
     setSubmitError("");
 
     try {
-      // Track time spent on the current question before submitting
       trackQuestionTime();
-      questionStartTime.current = Date.now(); // reset so it doesn't double-count
+      questionStartTime.current = Date.now();
 
-      // Read from ref (always up-to-date) and merge with localStorage as safety net
       const finalAnswers: AnswerMap = { ...answersRef.current };
-
-      // Also check localStorage in case ref is stale
       const saved = localStorage.getItem(`answers-${attemptId}`);
       if (saved) {
         const savedAnswers: AnswerMap = JSON.parse(saved);
@@ -177,9 +238,8 @@ export default function QuizTake() {
         }
       }
 
-      // Ensure all questions have entries
-      if (quiz) {
-        for (const q of quiz.questions) {
+      if (attempt) {
+        for (const q of attempt.questions) {
           if (!finalAnswers[q.id]) {
             finalAnswers[q.id] = { selectedAnswer: null, timeSpentSeconds: 0 };
           }
@@ -189,90 +249,201 @@ export default function QuizTake() {
       const res = await fetch(`/api/attempt/${attemptId}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: finalAnswers, timedOut }),
+        body: JSON.stringify({
+          answers: finalAnswers,
+          flaggedQuestionIds: Array.from(flaggedRef.current),
+          timedOut,
+        }),
       });
 
-      if (res.ok) {
-        const resultData = await res.json();
-        sessionStorage.setItem("latest-quiz-results", JSON.stringify(resultData));
-
-        localStorage.removeItem(`answers-${attemptId}`);
-        localStorage.removeItem(`index-${attemptId}`);
-        sessionStorage.removeItem(`attempt-${params.quizId}`);
-        router.push(`/quiz/${params.quizId}/results/${resultData.attempt.id}`);
-      } else {
+      if (!res.ok) {
+        // If the server says the attempt was already submitted (race with
+        // auto-submit), just navigate to the results page.
+        if (res.status === 400) {
+          router.push(`/quiz/${params.quizId}/results/${attemptId}`);
+          return;
+        }
         throw new Error(`Server error (${res.status})`);
       }
+      const resultData = await res.json();
+
+      sessionStorage.setItem(
+        "latest-quiz-results",
+        JSON.stringify(resultData)
+      );
+      localStorage.removeItem(`answers-${attemptId}`);
+      localStorage.removeItem(`flagged-${attemptId}`);
+      localStorage.removeItem(`index-${attemptId}`);
+      sessionStorage.removeItem(`attempt-${params.quizId}`);
+
+      router.push(
+        `/quiz/${params.quizId}/results/${resultData.attempt.id}`
+      );
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Failed to submit. Try again.");
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to submit. Try again."
+      );
       setSubmitting(false);
       submittingRef.current = false;
     }
   };
 
-  if (loading || !quiz) {
+  // ─── Keyboard shortcuts ──────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+      if (!attempt) return;
+      const q = attempt.questions[currentIndex];
+      if (!q) return;
+      const key = e.key.toUpperCase();
+      if (["A", "B", "C", "D", "E"].includes(key)) {
+        e.preventDefault();
+        selectAnswer(q.id, key);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToQuestion(currentIndex - 1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToQuestion(currentIndex + 1);
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        toggleFlag(q.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt, currentIndex]);
+
+  const swipeHandlers = useSwipe({
+    onSwipeLeft: () => goToQuestion(currentIndex + 1),
+    onSwipeRight: () => goToQuestion(currentIndex - 1),
+  });
+
+  if (loading || !attempt) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="glass rounded-2xl p-8 shimmer">
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground serif-italic">Loading…</p>
         </div>
       </div>
     );
   }
 
-  const question = quiz.questions[currentIndex];
+  const question = attempt.questions[currentIndex];
   const answeredCount = Object.values(answers).filter(
     (a) => a.selectedAnswer !== null
   ).length;
+  const isExam = attempt.mode === "exam";
+  const isFlagged = flagged.has(question.id);
+
+  // Timer display for exam vs practice
+  let timerText = formatTime(elapsed);
+  let timerClass = "text-foreground";
+  if (isExam && attempt.timeLimitSeconds != null) {
+    const remaining = Math.max(0, attempt.timeLimitSeconds - elapsed);
+    timerText = formatTime(remaining);
+    if (remaining <= 60) timerClass = "timer-warning";
+    else if (remaining <= 300) timerClass = "timer-caution";
+  }
+
   return (
-    <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full p-4">
-      {/* Timer Bar */}
-      <div className="glass-strong rounded-2xl px-6 py-3 mb-4 flex items-center justify-between sticky top-4 z-20">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-medium text-muted-foreground hidden sm:block">
-            {quiz.title}
-          </h2>
-          <Badge variant="secondary" className="text-xs">
-            {answeredCount}/{quiz.questions.length} answered
-          </Badge>
+    <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-3 md:px-6 pb-24 md:pb-6 pt-3 md:pt-6 safe-top">
+      {/* ─── Top bar ───────────────────────────────────────────── */}
+      <header className="glass-strong rounded-2xl px-4 md:px-6 py-3 mb-3 md:mb-4 flex items-center justify-between sticky top-3 z-30 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="small-caps text-[11px] text-muted-foreground hidden sm:inline">
+            {isExam ? "Exam" : "Practice"}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground numeral text-sm">
+              {answeredCount}
+            </span>
+            <span className="mx-1 opacity-60">/</span>
+            {attempt.totalQuestions}
+          </span>
+          {flagged.size > 0 && (
+            <span className="flex items-center gap-1 text-[11px] text-[color:var(--gold)]">
+              <FlagIcon filled className="w-3 h-3" /> {flagged.size}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-2xl font-mono font-bold tabular-nums text-foreground">
-            {formatTime(timeElapsed)}
+        <div className="flex items-center gap-3">
+          <span
+            className={`font-mono tabular-nums font-semibold ${
+              isExam ? "text-2xl md:text-3xl" : "text-lg md:text-xl"
+            } ${timerClass}`}
+          >
+            {timerText}
           </span>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowSubmitDialog(true)}
-            className="glass text-xs font-semibold"
+            className="glass text-xs font-semibold tap-target"
           >
             Submit
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Question Card */}
-      <div className="glass-strong rounded-3xl p-6 md:p-8 mb-4 flex-1 page-enter" key={question.id}>
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-sm font-bold text-primary">
-            Question {question.questionNumber}
-          </span>
-          <Badge variant="outline" className="text-xs glass">
-            {QUESTION_TYPES[question.questionType]?.name ?? question.questionType}
-          </Badge>
+      {/* ─── Question card ─────────────────────────────────────── */}
+      <article
+        key={question.id}
+        {...swipeHandlers}
+        className={`glass-strong rounded-3xl p-5 md:p-8 mb-3 md:mb-4 flex-1 touch-pan-y ${
+          direction === 1 ? "question-enter" : "question-enter-back"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-baseline gap-3">
+            <span className="numeral text-5xl md:text-6xl leading-none text-primary">
+              {String(question.questionNumber).padStart(2, "0")}
+            </span>
+            <div className="min-w-0">
+              <p className="small-caps text-[10px] text-muted-foreground mb-0.5">
+                Question
+              </p>
+              <p className="text-xs serif-italic text-muted-foreground truncate">
+                {QUESTION_TYPES[question.questionType]?.name ??
+                  question.questionType}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => toggleFlag(question.id)}
+            className={`tap-target rounded-full p-2.5 transition-all glow-hover ${
+              isFlagged
+                ? "bg-[color:var(--gold)]/15 text-[color:var(--gold)] border border-[color:var(--gold)]/40"
+                : "bg-secondary/40 text-muted-foreground border border-transparent hover:border-border"
+            }`}
+            aria-label={isFlagged ? "Unflag question" : "Flag question"}
+            title="Flag for review (F)"
+          >
+            <FlagIcon filled={isFlagged} className="w-4 h-4" />
+          </button>
         </div>
 
         <div className="mb-6">
-          <p className="text-base md:text-lg leading-relaxed text-foreground/90 whitespace-pre-line">
+          <p className="text-[16px] md:text-[17px] leading-[1.65] text-foreground/90 whitespace-pre-line">
             {question.stimulus}
           </p>
         </div>
 
-        <p className="text-sm font-semibold text-foreground mb-4 italic">
+        <div className="rule-ornament mb-5 text-xs">
+          <span aria-hidden="true">§</span>
+        </div>
+
+        <p className="serif-italic text-[15px] md:text-base text-foreground mb-5 leading-relaxed">
           {question.questionStem}
         </p>
 
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {(["A", "B", "C", "D", "E"] as const).map((letter) => {
             const isSelected =
               answers[question.id]?.selectedAnswer === letter;
@@ -280,58 +451,64 @@ export default function QuizTake() {
               <button
                 key={letter}
                 onClick={() => selectAnswer(question.id, letter)}
-                className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex items-start gap-3 ${
+                className={`tap-target w-full text-left p-3.5 md:p-4 rounded-2xl border transition-all duration-200 flex items-start gap-3 ${
                   isSelected
-                    ? "glass-strong border-primary/50 shadow-[0_0_15px_oklch(0.7_0.15_340/20%)]"
-                    : "glass border-transparent hover:border-primary/30 glow-hover"
+                    ? "bg-primary/8 border-primary/60 shadow-[0_4px_20px_-8px_var(--primary)]"
+                    : "glass border-transparent hover:border-primary/25"
                 }`}
               >
                 <span
-                  className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                  className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all font-display ${
                     isSelected
-                      ? "bg-gradient-to-br from-pink-500 to-rose-500 text-white"
+                      ? "bg-primary text-primary-foreground scale-105"
                       : "bg-secondary text-secondary-foreground"
                   }`}
                 >
                   {letter}
                 </span>
-                <span className="text-sm md:text-base leading-relaxed pt-1">
+                <span className="text-[15px] md:text-base leading-relaxed pt-1.5">
                   {question.choices[letter]}
                 </span>
               </button>
             );
           })}
         </div>
-      </div>
+      </article>
 
-      {/* Navigation */}
-      <div className="glass-strong rounded-2xl px-4 py-3 flex items-center justify-between sticky bottom-4">
+      {/* ─── Bottom nav ────────────────────────────────────────── */}
+      <nav className="glass-strong rounded-2xl px-3 py-2.5 flex items-center justify-between sticky bottom-3 safe-bottom z-30">
         <Button
           variant="ghost"
           onClick={() => goToQuestion(currentIndex - 1)}
           disabled={currentIndex === 0}
-          className="text-sm"
+          className="text-sm tap-target"
+          aria-label="Previous question"
         >
-          Previous
+          ←
         </Button>
 
-        <div className="flex gap-1.5 flex-wrap justify-center max-w-[60%]">
-          {quiz.questions.map((q, i) => {
-            const isAnswered = answers[q.id]?.selectedAnswer !== null;
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide max-w-[70%]">
+          {attempt.questions.map((q, i) => {
+            const isAnswered = answers[q.id]?.selectedAnswer != null;
             const isCurrent = i === currentIndex;
+            const isFlaggedNav = flagged.has(q.id);
             return (
               <button
                 key={q.id}
                 onClick={() => goToQuestion(i)}
-                className={`w-7 h-7 rounded-full text-xs font-semibold transition-all ${
+                className={`relative shrink-0 w-8 h-8 rounded-full text-xs font-semibold transition-all font-display ${
                   isCurrent
-                    ? "bg-gradient-to-br from-pink-500 to-rose-500 text-white scale-110 shadow-lg"
+                    ? "bg-primary text-primary-foreground scale-110 shadow-md"
                     : isAnswered
-                    ? "bg-primary/20 text-primary"
-                    : "bg-secondary/50 text-muted-foreground"
+                      ? "bg-primary/20 text-primary"
+                      : "bg-secondary/50 text-muted-foreground"
                 }`}
+                aria-label={`Question ${i + 1}${isFlaggedNav ? " (flagged)" : ""}`}
               >
                 {i + 1}
+                {isFlaggedNav && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[color:var(--gold)] border border-background" />
+                )}
               </button>
             );
           })}
@@ -340,26 +517,35 @@ export default function QuizTake() {
         <Button
           variant="ghost"
           onClick={() => goToQuestion(currentIndex + 1)}
-          disabled={currentIndex === quiz.questions.length - 1}
-          className="text-sm"
+          disabled={currentIndex === attempt.questions.length - 1}
+          className="text-sm tap-target"
+          aria-label="Next question"
         >
-          Next
+          →
         </Button>
-      </div>
+      </nav>
 
-      {/* Submit Confirmation Dialog */}
+      {/* ─── Submit dialog ─────────────────────────────────────── */}
       <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
         <DialogContent className="glass-strong border-primary/20">
           <DialogHeader>
-            <DialogTitle>Submit Quiz?</DialogTitle>
+            <DialogTitle className="font-display text-2xl">
+              {isExam ? "Submit exam?" : "Submit quiz?"}
+            </DialogTitle>
             <DialogDescription>
-              You have answered {answeredCount} of {quiz.questions.length}{" "}
-              questions.
-              {answeredCount < quiz.questions.length && (
+              You&apos;ve answered{" "}
+              <span className="numeral text-foreground">
+                {answeredCount}
+              </span>{" "}
+              of {attempt.totalQuestions}.
+              {answeredCount < attempt.totalQuestions && (
                 <span className="block mt-1 text-destructive">
-                  {quiz.questions.length - answeredCount} question
-                  {quiz.questions.length - answeredCount > 1 ? "s are" : " is"}{" "}
-                  unanswered.
+                  {attempt.totalQuestions - answeredCount} left blank.
+                </span>
+              )}
+              {flagged.size > 0 && (
+                <span className="block mt-1 text-[color:var(--gold-foreground)]">
+                  {flagged.size} flagged for review.
                 </span>
               )}
             </DialogDescription>
@@ -373,20 +559,48 @@ export default function QuizTake() {
             <Button
               variant="outline"
               onClick={() => setShowSubmitDialog(false)}
-              className="flex-1"
+              className="flex-1 tap-target"
             >
               Keep Working
             </Button>
             <Button
-              onClick={() => handleSubmit(false)}
+              onClick={() => {
+                if (submittingRef.current) return;
+                submittingRef.current = true;
+                void submitAttempt(false);
+              }}
               disabled={submitting}
-              className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white border-0"
+              className="flex-1 tap-target bg-primary text-primary-foreground border-0"
             >
-              {submitting ? "Submitting..." : "Submit"}
+              {submitting ? "Submitting…" : "Submit"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function FlagIcon({
+  filled,
+  className,
+}: {
+  filled?: boolean;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 21V4" />
+      <path d="M4 4h11l-1.5 4L15 12H4" />
+    </svg>
   );
 }

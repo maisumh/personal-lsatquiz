@@ -14,23 +14,13 @@ export async function GET(
     return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
   }
 
-  // Strip correct answers and explanations for quiz-takers
-  const safeQuestions = quiz.questions.map((q) => ({
-    id: q.id,
-    questionNumber: q.questionNumber,
-    questionType: q.questionType,
-    stimulus: q.stimulus,
-    questionStem: q.questionStem,
-    choices: q.choices,
-  }));
-
   return NextResponse.json({
     id: quiz.id,
     title: quiz.title,
     type: quiz.type,
     questionTypes: quiz.questionTypes,
+    questionCount: quiz.questionCount ?? quiz.questions?.length ?? 10,
     timeLimitMinutes: quiz.timeLimitMinutes,
     createdAt: quiz.createdAt,
-    questions: safeQuestions,
   });
 }

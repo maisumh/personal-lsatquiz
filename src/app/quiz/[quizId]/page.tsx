@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { QUESTION_TYPES } from "@/lib/constants/question-types";
 
 interface QuizInfo {
@@ -11,8 +10,8 @@ interface QuizInfo {
   title: string;
   type: "quiz" | "exam";
   questionTypes: string[];
+  questionCount: number;
   timeLimitMinutes: number;
-  questions: { id: string }[];
 }
 
 export default function QuizLanding() {
@@ -21,11 +20,16 @@ export default function QuizLanding() {
   const [quiz, setQuiz] = useState<QuizInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/quiz/${params.quizId}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Not found");
+        return r.json();
+      })
       .then(setQuiz)
+      .catch(() => setError("Quiz not found"))
       .finally(() => setLoading(false));
   }, [params.quizId]);
 
@@ -36,85 +40,147 @@ export default function QuizLanding() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ quizId: params.quizId }),
     });
-    const { attemptId, startedAt } = await res.json();
-    // Store attempt info for the quiz-taking page
+    if (!res.ok) {
+      setError("Could not start attempt");
+      setStarting(false);
+      return;
+    }
+    const { attemptId, startedAt, timeLimitSeconds } = await res.json();
     sessionStorage.setItem(
       `attempt-${params.quizId}`,
-      JSON.stringify({ attemptId, startedAt })
+      JSON.stringify({ attemptId, startedAt, timeLimitSeconds })
     );
     router.push(`/quiz/${params.quizId}/take`);
   };
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="glass rounded-2xl p-8 shimmer">
-          <p className="text-muted-foreground">Loading quiz...</p>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="glass rounded-3xl p-8 shimmer">
+          <p className="text-muted-foreground serif-italic">Loading…</p>
         </div>
       </div>
     );
   }
 
-  if (!quiz) {
+  if (error || !quiz) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="glass rounded-2xl p-8">
-          <p className="text-destructive">Quiz not found</p>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="glass rounded-3xl p-8">
+          <p className="text-destructive">{error ?? "Quiz not found"}</p>
         </div>
       </div>
     );
   }
+
+  const isExam = quiz.type === "exam";
 
   return (
-    <div className="flex-1 flex items-center justify-center p-4">
-      <div className="glass-strong rounded-3xl p-8 md:p-12 max-w-lg w-full page-enter text-center">
-        <div className="mb-2">
-          <Badge
-            variant="secondary"
-            className="text-xs uppercase tracking-wider"
-          >
-            {quiz.type}
-          </Badge>
+    <div className="flex-1 flex items-center justify-center p-4 md:p-8">
+      <div className="paper-card p-8 md:p-12 max-w-xl w-full page-enter relative overflow-hidden">
+        {/* Ornamental corner mark */}
+        <div
+          className="absolute top-6 right-6 text-[color:var(--gold)] opacity-70 serif-italic text-sm"
+          aria-hidden="true"
+        >
+          {isExam ? "— timed —" : "— untimed —"}
         </div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4 bg-gradient-to-r from-pink-600 via-rose-500 to-pink-400 bg-clip-text text-transparent">
+
+        <p className="small-caps text-muted-foreground mb-4 text-xs">
+          {isExam ? "Logical Reasoning · Exam" : "Logical Reasoning · Practice"}
+        </p>
+
+        <h1
+          className="font-display text-4xl md:text-5xl leading-[1.05] tracking-tight mb-6"
+          style={{ fontVariationSettings: '"opsz" 144, "SOFT" 10' }}
+        >
           {quiz.title}
         </h1>
 
-        <div className="space-y-3 mb-8 text-muted-foreground">
-          <div className="flex items-center justify-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-            <span>{quiz.questions.length} questions</span>
-          </div>
-          <div className="flex items-center justify-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Untimed — take your time</span>
-          </div>
+        <div className="rule-ornament mb-6 text-xs">
+          <span>§</span>
         </div>
 
-        <div className="flex flex-wrap gap-2 justify-center mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <Stat
+            label="Questions"
+            value={String(quiz.questionCount)}
+            hint={isExam ? "LSAT-authentic set" : "sampled fresh each take"}
+          />
+          <Stat
+            label={isExam ? "Time limit" : "Time"}
+            value={isExam ? `${quiz.timeLimitMinutes}:00` : "∞"}
+            hint={isExam ? "auto-submits at 0:00" : "take your time"}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 mb-8">
           {quiz.questionTypes.map((type) => (
-            <Badge key={type} variant="outline" className="glass text-xs">
+            <span
+              key={type}
+              className="text-xs px-2.5 py-1 rounded-full border border-border bg-secondary/60 text-secondary-foreground serif-italic"
+            >
               {QUESTION_TYPES[type]?.name ?? type}
-            </Badge>
+            </span>
           ))}
         </div>
+
+        {isExam && (
+          <div className="mb-6 p-4 rounded-xl border border-[color:var(--gold)]/40 bg-[color:var(--gold)]/5">
+            <p className="text-sm leading-relaxed">
+              <span className="serif-italic text-[color:var(--gold-foreground)] font-semibold">
+                Exam mode.
+              </span>{" "}
+              You&apos;ll see a live countdown. Flag questions to return to them,
+              but the section auto-submits at zero — just like the real thing.
+            </p>
+          </div>
+        )}
 
         <Button
           onClick={handleStart}
           disabled={starting}
-          className="w-full h-14 text-lg font-semibold rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white border-0 glow-hover transition-all"
+          className={`w-full h-14 text-base font-semibold rounded-2xl tap-target glow-hover border-0 transition-all ${
+            isExam
+              ? "bg-foreground text-background hover:opacity-90"
+              : "bg-primary text-primary-foreground hover:bg-primary/90"
+          }`}
         >
-          {starting ? "Starting..." : "Start Quiz"}
+          {starting
+            ? "Starting…"
+            : isExam
+              ? "Begin Exam"
+              : "Begin Practice"}
         </Button>
 
-        <p className="text-xs text-muted-foreground mt-4">
-          A timer will track your time. Good luck!
+        <p className="text-xs text-muted-foreground mt-4 text-center serif-italic">
+          Good luck.
         </p>
       </div>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <p className="small-caps text-[10px] text-muted-foreground mb-1">
+        {label}
+      </p>
+      <p className="numeral text-4xl leading-none text-foreground">{value}</p>
+      {hint && (
+        <p className="text-[11px] text-muted-foreground mt-1.5 serif-italic">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,28 +1,27 @@
 import { NextResponse } from "next/server";
-import { getIndex, getAttempt } from "@/lib/blob";
+import { getIndex, listAttempts } from "@/lib/blob";
+import { QUESTION_TYPES } from "@/lib/constants/question-types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const index = await getIndex();
+  const [index, allAttempts] = await Promise.all([
+    getIndex(),
+    listAttempts(),
+  ]);
 
-  // Fetch all completed attempts with their answer data
-  const attemptDetails = await Promise.all(
-    index.attempts
-      .filter((a) => a.status === "completed" || a.status === "timed_out")
-      .map((a) => getAttempt(a.id))
+  const completed = allAttempts.filter(
+    (a) => a.status === "completed" || a.status === "timed_out"
   );
 
-  const completedAttempts = attemptDetails.filter(Boolean);
-
-  // Calculate overall stats
   const totalQuizzes = index.quizzes.length;
-  const totalAttempts = completedAttempts.length;
+  const totalAttempts = completed.length;
+
   const averageScore =
     totalAttempts > 0
       ? Math.round(
-          (completedAttempts.reduce(
-            (sum, a) => sum + ((a!.score ?? 0) / a!.totalQuestions) * 100,
+          (completed.reduce(
+            (sum, a) => sum + ((a.score ?? 0) / a.totalQuestions) * 100,
             0
           ) /
             totalAttempts) *
@@ -31,50 +30,64 @@ export async function GET() {
       : 0;
 
   const mostRecent =
-    completedAttempts.length > 0
-      ? completedAttempts.sort(
+    completed.length > 0
+      ? [...completed].sort(
           (a, b) =>
-            new Date(b!.completedAt!).getTime() -
-            new Date(a!.completedAt!).getTime()
+            new Date(b.completedAt!).getTime() -
+            new Date(a.completedAt!).getTime()
         )[0]
       : null;
 
-  // Score over time data
-  const scoreOverTime = completedAttempts
+  const scoreOverTime = [...completed]
     .sort(
       (a, b) =>
-        new Date(a!.completedAt!).getTime() -
-        new Date(b!.completedAt!).getTime()
+        new Date(a.completedAt!).getTime() -
+        new Date(b.completedAt!).getTime()
     )
     .map((a) => ({
-      date: a!.completedAt,
-      score: Math.round(((a!.score ?? 0) / a!.totalQuestions) * 100),
-      quizTitle: index.attempts.find((ia) => ia.id === a!.id)?.quizTitle ?? "",
+      date: a.completedAt,
+      score: Math.round(((a.score ?? 0) / a.totalQuestions) * 100),
+      quizTitle: a.quizTitle ?? "",
+      mode: a.mode ?? "quiz",
     }));
 
-  // Question type breakdown
+  // Per-question-type accuracy aggregated across all attempts
   const typeStats: Record<string, { correct: number; total: number }> = {};
-  for (const attempt of completedAttempts) {
-    if (!attempt) continue;
-    for (const answer of attempt.answers) {
-      if (!typeStats[answer.questionType]) {
-        typeStats[answer.questionType] = { correct: 0, total: 0 };
+  for (const a of completed) {
+    for (const ans of a.answers) {
+      if (!typeStats[ans.questionType]) {
+        typeStats[ans.questionType] = { correct: 0, total: 0 };
       }
-      typeStats[answer.questionType].total++;
-      if (answer.isCorrect) {
-        typeStats[answer.questionType].correct++;
-      }
+      typeStats[ans.questionType].total++;
+      if (ans.isCorrect) typeStats[ans.questionType].correct++;
     }
   }
 
-  const typeBreakdown = Object.entries(typeStats).map(
-    ([type, { correct, total }]) => ({
+  const typeBreakdown = Object.entries(typeStats)
+    .map(([type, { correct, total }]) => ({
       type,
+      name: QUESTION_TYPES[type]?.name ?? type,
+      chapter: QUESTION_TYPES[type]?.chapter ?? 0,
       accuracy: Math.round((correct / total) * 100),
       correct,
       total,
-    })
+    }))
+    .sort((a, b) => a.accuracy - b.accuracy);
+
+  // Flagged + missed aggregated counts (for the "Study" panel)
+  const flaggedCount = completed.reduce(
+    (sum, a) => sum + (a.flaggedQuestionIds?.length ?? 0),
+    0
   );
+  const missedCount = completed.reduce(
+    (sum, a) => sum + a.answers.filter((ans) => !ans.isCorrect).length,
+    0
+  );
+
+  // Weakest 3 chapters (lowest accuracy, min 3 attempts)
+  const weakestChapters = typeBreakdown
+    .filter((t) => t.total >= 3)
+    .slice(0, 3);
 
   return NextResponse.json({
     summary: {
@@ -87,31 +100,44 @@ export async function GET() {
           )
         : null,
       mostRecentDate: mostRecent?.completedAt ?? null,
+      flaggedCount,
+      missedCount,
     },
     scoreOverTime,
     typeBreakdown,
+    weakestChapters,
     recentQuizzes: index.quizzes
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
       .map((q) => {
-        const quizAttempts = index.attempts.filter((a) => a.quizId === q.id);
-        const completedAttempts = quizAttempts.filter(
-          (a) => a.score !== null && (a.status === "completed" || a.status === "timed_out")
+        const quizAttempts = allAttempts.filter((a) => a.quizId === q.id);
+        const completedForQuiz = quizAttempts.filter(
+          (a) =>
+            a.score !== null &&
+            (a.status === "completed" || a.status === "timed_out")
         );
-        const latestAttempt = completedAttempts.sort(
-          (a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime()
+        const latestAttempt = [...completedForQuiz].sort(
+          (a, b) =>
+            new Date(b.completedAt ?? 0).getTime() -
+            new Date(a.completedAt ?? 0).getTime()
         )[0];
         return {
           ...q,
           attempts: quizAttempts.length,
-          bestScore: completedAttempts.length > 0
-            ? Math.max(...completedAttempts.map((a) => Math.round(((a.score ?? 0) / a.totalQuestions) * 100)))
-            : 0,
+          bestScore:
+            completedForQuiz.length > 0
+              ? Math.max(
+                  ...completedForQuiz.map((a) =>
+                    Math.round(((a.score ?? 0) / a.totalQuestions) * 100)
+                  )
+                )
+              : 0,
           latestAttemptId: latestAttempt?.id ?? null,
           lastTakenAt: latestAttempt?.completedAt ?? null,
         };
-      }),
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.lastTakenAt ?? 0).getTime() -
+          new Date(a.lastTakenAt ?? 0).getTime()
+      ),
   });
 }
